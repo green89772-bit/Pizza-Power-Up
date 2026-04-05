@@ -1,0 +1,5 @@
+{
+  "name": "Pizza Power-Up",
+  "description": "A gamified ESL speaking challenge system created by Teacher Penny, featuring real-time speech recognition and AI-powered feedback.",
+  "requestFramePermissions": ["microphone"]
+}
