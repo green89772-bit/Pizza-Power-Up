@@ -74,27 +74,53 @@ const getSpeechRecognition = () => {
 };
 
 export default function App() {
-  const [state, setState] = useState<GameState>({
-    view: 'selection',
-    student: null,
-    level: 1,
-    currentPart: 0,
-    score: 0,
-    isRecording: false,
-    transcript: '',
-    maxVol: 0,
-    frequencyData: Array(8).fill(0),
-    pizzaProgress: 0,
-    drinkProgress: 0,
-    unlockedParts: 1,
-    unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
-    completedLevels: [],
-    pendingLevels: [],
-    taskComplete: false,
-    teacherFeedback: {},
-    aiFeedback: {},
-    isMuted: false,
+  const [state, setState] = useState<GameState>(() => {
+    const saved = localStorage.getItem('pizza_power_up_state');
+    const defaultState: GameState = {
+      view: 'selection',
+      student: null,
+      level: 1,
+      currentPart: 0,
+      score: 0,
+      isRecording: false,
+      transcript: '',
+      maxVol: 0,
+      frequencyData: Array(8).fill(0),
+      pizzaProgress: 0,
+      drinkProgress: 0,
+      unlockedParts: 1,
+      unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+      completedLevels: [],
+      pendingLevels: [],
+      taskComplete: false,
+      teacherFeedback: {},
+      aiFeedback: {},
+      isMuted: false,
+    };
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaultState,
+          ...parsed,
+          // Always reset transient recording state on load
+          isRecording: false,
+          transcript: '',
+          maxVol: 0,
+          frequencyData: Array(8).fill(0),
+        };
+      } catch (e) {
+        console.error("Failed to parse saved state", e);
+      }
+    }
+    return defaultState;
   });
+
+  useEffect(() => {
+    localStorage.setItem('pizza_power_up_state', JSON.stringify(state));
+  }, [state]);
+
 
   const recordingStartTimeRef = useRef<number>(0);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -455,7 +481,7 @@ export default function App() {
     }
   };
 
-  const [selectedId, setSelectedId] = useState<string>("");
+  const [selectedId, setSelectedId] = useState<string>(state.student?.id || "");
   const [showResult, setShowResult] = useState(false);
   const [lastMissedWords, setLastMissedWords] = useState<string[]>([]);
   const [lastTranscript, setLastTranscript] = useState<string>('');
