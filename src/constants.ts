@@ -9,6 +9,7 @@ export interface StudentScript {
   name: string;
   topic: string;
   title: string;
+  gender: 'boy' | 'girl';
   scripts: ScriptPart[]; // 4 parts with emotional parameters
   loomUrl?: string;
 }
@@ -19,6 +20,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Sophia",
     topic: "Air Pollution",
     title: "Magic Sky Sophia",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/c1f55701246f4e43b8fc538cd472762f",
     scripts: [
       { text: "Hello everyone! My name is Sophia. Have you ever looked up at the Taichung sky ▲ and noticed it looks gray (↑) and blurry (↑)? That is air pollution ▲. It happens because there are too many ▲ factories and cars in our city. When I breathe this dirty air ▲, it makes me feel very angry ▲ and sad ▲ for our Earth ▲.", pitch: 1.1, rate: 1.0 },
@@ -32,6 +34,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Linus",
     topic: "Stray Animals",
     title: "Animal Hero Linus",
+    gender: "boy",
     loomUrl: "https://www.loom.com/share/b4d6648e2a434cd8beb90fdf013e69f5",
     scripts: [
       { text: "Hello everyone! My name is Linus. Today, I want to talk about our \"furry neighbors\"—the stray animals of Taichung. During my winter vacation, I rode my bike to a friend’s house, and I saw something on the street that changed my heart forever.", pitch: 1.1, rate: 1.0 },
@@ -45,6 +48,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Robben",
     topic: "Packaging Waste",
     title: "Eco Warrior Robben",
+    gender: "boy",
     loomUrl: "https://www.loom.com/share/14d8f6c44ed648f0aa06328869d007f7",
     scripts: [
       { text: "Hello everyone! My name is Robben. Today, I want to talk about a hidden problem in Taichung. During my winter vacation, I saw something scary: mountains of packaging from online shopping parcels. It made me realize that our planet is being buried in plastic and paper.", pitch: 1.1, rate: 1.0 },
@@ -58,6 +62,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Eason",
     topic: "Food Waste",
     title: "Food Saver Eason",
+    gender: "boy",
     scripts: [
       { text: "Hello everyone! My name is Eason. Have you ever thought about where your food goes after you throw it away? Today, I want to talk to you about a very big problem: food waste. During my summer vacation, I looked in my kitchen and saw many things we bought but never used. They were all expired!", pitch: 1.1, rate: 1.0 },
       { text: "It reminded me of a story from when I was little. I didn't know what \"expired\" meant, so I accidentally ate some old yogurt. The next day, my stomach hurt so much! I had to stay in the bathroom all day and I felt terrible. That painful experience taught me a very important lesson.", pitch: 0.85, rate: 0.85 },
@@ -70,6 +75,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Elsa",
     topic: "Air Pollution",
     title: "Air Guardian Elsa",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/8a408a68762d4bba9feba2fa26cdaef5",
     scripts: [
       { text: "Hello everyone! My name is **Elsa**. Every morning on my way to school, I see a lot of **cars** ▲ on the street. These vehicles pump **toxic smoke** ▲ directly into our faces while we walk. Our **lungs** ▲ are suffering because of **bad air quality** ▲. It is time to face this **serious problem** ▲ together.", pitch: 1.1, rate: 1.0 },
@@ -83,6 +89,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Yunny",
     topic: "Stray Animals",
     title: "Animal Voice Yunny",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/6f06f69a183442aebf1571799e8ad51a",
     scripts: [
       { text: "Hello everyone! My name is **Yunny**. It **breaks my heart** ▲ to see poor **dogs** and **cats** ▲ living on the street with **no one to love them** ▲. They suffer from **hunger** (↑), **cold** (↑), and **diseases** ▲ every single day. We must be the **voice** ▲ for those who **cannot speak** ▲ for themselves!", pitch: 1.1, rate: 1.0 },
@@ -96,6 +103,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Winny",
     topic: "Eco Choices",
     title: "Smart Choice Winny",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/349b57966d38491d9ef5d8fb8b33ace8",
     scripts: [
       { text: "Hello everyone! My name is **Winny**. Today, I want to share my **mission** ▲ to make Taichung a **cleaner** and **healthier home** ▲. During my **winter vacation** ▲, I went to the market with my mom. I saw so many people using **small plastic bags** ▲ for every little thing. The ground was **dirty** (↑) and it smelled **very bad** ▲.", pitch: 1.1, rate: 1.0 },
@@ -109,6 +117,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Ryan",
     topic: "Food Waste",
     title: "Food Saver Ryan",
+    gender: "boy",
     loomUrl: "https://www.loom.com/share/2e0c74f3964e40449719ab468b2f76bc",
     scripts: [
       { text: "Hello everyone! My name is **Ryan**. Have you ever **thought** ▲ about where your **food waste** ▲ goes after you **throw it away** (↑)? Today, I want to talk about a **big problem** ▲ in Taichung: **food waste** ▲.", pitch: 1.1, rate: 1.0 },
@@ -122,6 +131,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Rebecca",
     topic: "Air Quality",
     title: "Air Guardian Rebecca",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/1135b076835543c78bf504df102cdfbf",
     scripts: [
       { text: "Close your eyes and **imagine** ▲ a city where you must **wear a mask** ▲ just to go outside and play. Sadly, this **nightmare** ▲ is starting to **happen here** ▲ in Taichung. When I see **thick smoke** ▲ coming from factories and cars, I feel **very angry** ▲. It feels like our **city is sick** ▲. **Air pollution** ▲ is **not a joke** ▲; it is destroying our **air** and our **future** ▲.", pitch: 1.1, rate: 1.0 },
@@ -135,6 +145,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Vincent",
     topic: "Stray Animals",
     title: "Animal Friend Vincent",
+    gender: "boy",
     scripts: [
       { text: "Hello everyone! My name is **Vincent**. Imagine a **perfect city** ▲ where every **stray animal** ▲ has a **warm bed** ▲ and a **full bowl of food** ▲. Sadly, our **reality** ▲ in Taichung is **quite different** ▲. When I look around, I see **sad dogs** ▲ and **trash** ▲ on the streets. It makes me feel **very sad** ▲ because animals are **not toys** ▲; they **feel pain** ▲ and they **feel lonely** ▲ just like us.", pitch: 1.1, rate: 1.0 },
       { text: "During **Chinese New Year** ▲, I saw many dogs **wandering** ▲ on the street. I even saw some **kind people** ▲ gave them food because they didn't want them to **starve** ▲. I learned that many dogs are **abandoned** ▲ by their owners when they become a **burden** ▲. This is a **very big problem** ▲. If you have a pet, please **never give up** ▲ on them.", pitch: 0.85, rate: 0.85 },
@@ -147,6 +158,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Leo",
     topic: "Plastic Pollution",
     title: "Eco Hero Leo",
+    gender: "boy",
     loomUrl: "https://www.loom.com/share/2643321f56be4029bb488da9e2a3f120",
     scripts: [
       { text: "Hello everyone! My name is **Leo**. Have you ever **thought** ▲ about where your **plastic bags** ▲ go after you **throw them away** (↑)? In Taichung, we have a **huge problem** ▲. Our **incinerators** ▲ are **overloaded** ▲ because we use **too much plastic** ▲ every day. It is time for us to **wake up** ▲ and see the **truth** ▲!", pitch: 1.1, rate: 1.0 },
@@ -160,6 +172,7 @@ export const STUDENTS: StudentScript[] = [
     name: "William",
     topic: "Food Waste",
     title: "Clean Plate William",
+    gender: "boy",
     loomUrl: "https://www.loom.com/share/e90af0e283aa45e88ee0d4989e11c761",
     scripts: [
       { text: "Hello everyone! My name is **William**. Have you ever **walked** ▲ down the street and seen someone **throw away their breakfast** ▲ because they **couldn't finish it** (↑)? It makes me feel **very sad** ▲. Today, I want to talk about why we must **stop wasting food** ▲ to **save our city** ▲.", pitch: 1.1, rate: 1.0 },
@@ -173,6 +186,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Cynthia",
     topic: "Air Quality",
     title: "Air Guardian Cynthia",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/d9e22f5c28354da49a191b1dddfd1d00",
     scripts: [
       { text: "Hello everyone! My name is **Cynthia**. I **love** (↑) Taichung, but I **really hate** ▲ the **dirty air** ▲. It **breaks my heart** ▲ to see our beautiful city covered in **black smoke** ▲. We are **destroying our own environment** ▲ just because it is **convenient** ▲ to drive cars everywhere. We need to **wake up** ▲!", pitch: 1.1, rate: 1.0 },
@@ -186,6 +200,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Fiona",
     topic: "Stray Animals",
     title: "Animal Friend Fiona",
+    gender: "girl",
     loomUrl: "https://www.loom.com/share/dc62503cdd7541dc82e8305e35c14f3f",
     scripts: [
       { text: "Hello everyone! My name is **Fiona**. Today, I want to talk about a **serious problem** ▲ in our city: **stray animals** ▲. In Taichung, many **cats** and **dogs** ▲ live on the street with **no shelter** ▲. **Life is very hard** ▲ for them, especially when it is **cold** (↑), **rainy** (↑), and **windy** ▲.", pitch: 1.1, rate: 1.0 },
@@ -199,6 +214,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Zac",
     topic: "Plastic Pollution",
     title: "River Guard Zac",
+    gender: "boy",
     scripts: [
       { text: "Hello everyone! My name is **Zac**. Today, I want to talk about a **small thing** ▲ that creates a **big problem** ▲ in Taichung: **plastic bags** ▲. One day, on my way home from school, I saw a **big pile of plastic bags** ▲ near a drain. I decided to **stop** ▲ and **count them** ▲.", pitch: 1.1, rate: 1.0 },
       { text: "I found **so many bags** ▲ in just one spot! It made me think: if **every person** ▲ in Taichung keeps using plastic bags **every day** ▲, our Earth will soon be **full of trash** ▲. We see them in our **parks** ▲ and on our **streets** ▲. This is a **problem** ▲ we **cannot ignore** ▲ anymore.", pitch: 0.9, rate: 0.9 },
@@ -211,6 +227,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Jeremy",
     topic: "Food Waste",
     title: "Food Warrior Jeremy",
+    gender: "boy",
     scripts: [
       { text: "Hello everyone! My name is **Jeremy**. Have you ever **thought** ▲ about where your **food goes** ▲ after you **throw it away** (↑)? During my **Chinese New Year holiday** ▲, I noticed a **big problem** ▲ in Taichung. I saw **so much food waste** ▲! Some people threw away food that was **expired** ▲, and others just **didn't finish their meals** ▲.", pitch: 1.1, rate: 1.0 },
       { text: "This made me feel **very sad** ▲ for our **resources** ▲. Did you know that Taichung is **producing more food waste** ▲ than we can eat? When we **waste food** ▲, it **destroys our environment** ▲ and even creates **bad air** ▲ for our beautiful city. We must **stop this right now** ▲!", pitch: 0.85, rate: 0.85 },
@@ -223,6 +240,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Emma",
     topic: "Air Quality",
     title: "Air Guardian Emma",
+    gender: "girl",
     scripts: [
       { text: "Hello everyone! My name is **Emma**. Did you know that Taichung’s **temperature** ▲ is getting **hotter every year** ▲? This is happening because of **air pollution** ▲ and **global warming** ▲. Today, I want to **speak up** ▲ for our **health** ▲ and our **home** ▲.", pitch: 1.1, rate: 1.0 },
       { text: "During my **winter vacation** ▲, I realized we needed to start with our **own family's pollution** ▲. Since we have a **motorcycle** ▲, my father and I decided to **check the health condition** ▲ of our motorcycle. We found out that if the engine is **not well maintained** ▲, it could be pumping out **thick, black smoke** ▲ into the air. This made me realize that even a **single personal vehicle** ▲ can be a **big part of the problem** ▲.", pitch: 0.9, rate: 0.9 },
@@ -235,6 +253,7 @@ export const STUDENTS: StudentScript[] = [
     name: "Dora",
     topic: "Stray Animals",
     title: "Animal Voice Dora",
+    gender: "girl",
     scripts: [
       { text: "Hello everyone! My name is **Dora**. I have a **question** ▲ for you: What would you do if you were **left alone in the rain** ▲ without an umbrella? You would feel **cold** (↑), **scared** (↑), and **very lonely** ▲. Sadly, that is the **daily reality** ▲ for thousands of **stray animals** ▲ in Taichung.", pitch: 1.1, rate: 1.0 },
       { text: "This winter, I saw a **group of stray dogs and cats** ▲. They were **very dirty** ▲ and they **smelled bad** ▲ because they had no one to wash them. I felt **so sorry** ▲ for them because they were **suffering in the cold** ▲. Later, they were taken to an **animal shelter** ▲. I was **happy** ▲ because they finally had a **warm home** ▲.", pitch: 0.85, rate: 0.85 },

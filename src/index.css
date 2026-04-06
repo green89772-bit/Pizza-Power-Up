@@ -8,24 +8,21 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-white overflow-x-hidden min-h-screen;
-    background: radial-gradient(circle at top right, #1e3a8a, transparent),
-                radial-gradient(circle at bottom left, #064e3b, transparent),
-                #020617;
+    @apply bg-[#FFF9F0] text-[#5D4037] overflow-x-hidden min-h-screen;
   }
 }
 
 @layer components {
   .glass {
-    @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-xl;
+    @apply bg-white/70 backdrop-blur-md border border-[#FFC107]/30 shadow-lg;
   }
   
   .glass-dark {
-    @apply bg-black/30 backdrop-blur-lg border border-white/10 shadow-2xl;
+    @apply bg-[#FFC107]/20 backdrop-blur-lg border border-[#FF5722]/20 shadow-xl;
   }
 
   .btn-primary {
-    @apply px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-500/20;
+    @apply px-8 py-4 bg-[#FF5722] hover:bg-[#E64A19] rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-[#FF5722]/30 hover:scale-105;
   }
 
   .energy-ball {

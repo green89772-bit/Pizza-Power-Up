@@ -132,8 +132,8 @@ export default function App() {
     const shouldPlay = (state.view === 'selection' || state.view === 'map' || state.view === 'teacher') && !state.isMuted && hasStarted;
     
     // Grand Orchestral Adventure track (Mario Galaxy vibe)
-    const soundUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'; 
-    const fallbackUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
+    const soundUrl = 'Adventures in Adventureland (online-audio-converter.com).mR4'; 
+    const fallbackUrl = 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=game-music-7408.mp3';
 
     if (!ambientAudioRef.current) {
       const audio = new Audio();
@@ -231,26 +231,34 @@ export default function App() {
             Tap anywhere to start music 🎵
           </motion.div>
         )}
-        <div className={`flex items-center gap-3 glass px-4 py-2 rounded-2xl border transition-all ${state.isMuted ? 'border-white/5 opacity-60' : 'border-white/10'}`}>
+        <div className={`flex items-center gap-3 glass px-4 py-2 rounded-2xl border transition-all ${state.isMuted ? 'border-white/5 opacity-60' : 'border-orange-500/30 bg-orange-500/5'}`}>
           <div className="flex gap-1 items-end h-4">
             {[1, 2, 3, 4].map(i => (
               <motion.div
                 key={i}
-                className={`w-1 rounded-full ${state.isMuted ? 'bg-slate-700' : 'bg-blue-400'}`}
+                className={`w-1.5 rounded-full ${state.isMuted ? 'bg-slate-700' : 'bg-gradient-to-t from-orange-600 to-yellow-400'}`}
                 animate={audioUnlocked && !state.isMuted ? { height: [4, 16, 8, 12, 4] } : { height: 4 }}
-                transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.1 }}
+                transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
               />
             ))}
           </div>
-          <span className={`text-[10px] font-bold uppercase tracking-widest ${state.isMuted ? 'text-slate-500' : 'text-blue-400'}`}>
-            {state.isMuted ? 'Music Muted' : (audioUnlocked ? 'Ambient Music Active' : 'Music Paused')}
-          </span>
+          <div className="flex items-center gap-2">
+            <motion.div
+              animate={audioUnlocked && !state.isMuted ? { rotate: 360 } : { rotate: 0 }}
+              transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+            >
+              <Pizza className={`w-4 h-4 ${state.isMuted ? 'text-slate-600' : 'text-orange-500'}`} />
+            </motion.div>
+            <span className={`text-[10px] font-bold uppercase tracking-widest ${state.isMuted ? 'text-slate-500' : 'text-orange-400'}`}>
+              {state.isMuted ? 'Muted' : (audioUnlocked ? 'Pizza Party!' : 'Paused')}
+            </span>
+          </div>
           <button 
             onClick={(e) => {
               e.stopPropagation();
               setState(prev => ({ ...prev, isMuted: !prev.isMuted }));
             }}
-            className={`p-1.5 rounded-lg transition-colors ${state.isMuted ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-white/10 text-slate-500'}`}
+            className={`p-1.5 rounded-lg transition-colors ${state.isMuted ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-white/10 text-slate-500'}`}
             title={state.isMuted ? "Unmute" : "Mute"}
           >
             {state.isMuted ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
@@ -265,8 +273,8 @@ export default function App() {
     console.log("Starting app, attempting to unlock audio...");
     
     // Initialize and play audio immediately on this user-triggered event
-    const soundUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'; // Very stable fallback
-    const fallbackUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
+    const soundUrl = 'Adventures in Adventureland (online-audio-converter.com).mR4'; 
+    const fallbackUrl = 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=game-music-7408.mp3';
     
     if (!ambientAudioRef.current) {
       const audio = new Audio();
@@ -311,28 +319,40 @@ export default function App() {
   const handleGlobalClick = () => {
     if (hasStarted && !audioUnlocked && ambientAudioRef.current) {
       const audio = ambientAudioRef.current;
-      const soundUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-      const fallbackUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
+      const soundUrl = 'Adventures in Adventureland (online-audio-converter.com).mR4';
+      const fallbackUrl = 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=game-music-7408.mp3';
       
       console.log("Global click detected, unlocking audio...");
       
       const tryPlay = (url: string) => {
+        // Only change src and load if it's a different URL
         if (audio.src !== url) {
+          console.log(`Setting audio src to: ${url}`);
           audio.src = url;
-          audio.load();
+          audio.load(); // Ensure the new source is loaded
         }
+        // Attempt to play
         return audio.play();
       };
 
-      tryPlay(audio.src || soundUrl)
-        .then(() => setAudioUnlocked(true))
+      // Always try the primary soundUrl first if it's not already set or has failed.
+      tryPlay(soundUrl)
+        .then(() => {
+          console.log("Global click: Primary audio unlocked successfully!");
+          setAudioUnlocked(true);
+        })
         .catch(err => {
           if (err.name !== 'AbortError') {
-            console.warn("Global click play failed, trying fallback:", err);
+            console.warn("Global click: Primary audio failed, trying fallback:", err);
             tryPlay(fallbackUrl)
-              .then(() => setAudioUnlocked(true))
+              .then(() => {
+                console.log("Global click: Fallback audio unlocked successfully!");
+                setAudioUnlocked(true);
+              })
               .catch(fallbackErr => {
-                if (fallbackErr.name !== 'AbortError') console.error("Global click both failed:", fallbackErr);
+                if (fallbackErr.name !== 'AbortError') {
+                  console.error("Global click: Both primary and fallback audio failed:", fallbackErr);
+                }
               });
           }
         });
@@ -412,15 +432,21 @@ export default function App() {
   }, [mockProgress]);
 
   const analyzeWithGemini = async (transcript: string, targetScript: string, studentId: string, score: number, level: number, duration: number) => {
+    if (!transcript || transcript.length < 2) {
+      console.log("Transcript too short for AI analysis");
+      return;
+    }
+
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-flash-lite-preview",
         contents: `Analyze this student's English speaking practice. 
         Target Script: "${targetScript}"
         Student Transcript: "${transcript}"
         Provide feedback in JSON format with fields: pronunciation, grammar, intonation. 
-        Keep it encouraging and simple for a child.`,
+        Keep it encouraging and simple for a child. 
+        Example: {"pronunciation": "Great job on the 'th' sounds!", "grammar": "Perfect sentence structure!", "intonation": "Very expressive!"}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -436,35 +462,40 @@ export default function App() {
       });
 
       if (response.text) {
-        const feedback = JSON.parse(response.text);
-        setState(prev => ({
-          ...prev,
-          aiFeedback: {
-            ...prev.aiFeedback,
-            [studentId]: feedback
-          }
-        }));
+        try {
+          const feedback = JSON.parse(response.text.trim());
+          setState(prev => ({
+            ...prev,
+            aiFeedback: {
+              ...prev.aiFeedback,
+              [studentId]: feedback
+            }
+          }));
 
-        // Update mockProgress with AI feedback
-        setMockProgress(prev => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            aiFeedback: feedback
-          }
-        }));
+          // Update mockProgress with AI feedback
+          setMockProgress(prev => ({
+            ...prev,
+            [studentId]: {
+              ...prev[studentId],
+              aiFeedback: feedback
+            }
+          }));
 
-        // Send to GAS with AI feedback
-        sendToGAS(
-          state.student!.name, 
-          level, 
-          score, 
-          `${Math.floor(state.pizzaProgress)}%`, 
-          state.currentPart, 
-          transcript, 
-          duration,
-          feedback
-        );
+          // Send to GAS with AI feedback
+          sendToGAS(
+            state.student!.name, 
+            level, 
+            score, 
+            `${Math.floor(state.pizzaProgress)}%`, 
+            state.currentPart, 
+            transcript, 
+            duration,
+            feedback
+          );
+        } catch (parseError) {
+          console.error("JSON Parse error in AI feedback", parseError, response.text);
+          throw parseError;
+        }
       }
     } catch (e) {
       console.error("Gemini analysis failed", e);
@@ -1079,11 +1110,18 @@ export default function App() {
       method: 'POST',
       mode: 'no-cors',
       cache: 'no-cache',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     })
     .then(() => console.log("GAS Data Sent (no-cors mode)"))
-    .catch(e => console.error("GAS Log Error:", e));
+    .catch(e => {
+      console.error("GAS Log Error:", e);
+      // Fallback to GET if POST fails (some GAS scripts are set up for doGet)
+      const queryParams = new URLSearchParams(data as any).toString();
+      fetch(`${url}?${queryParams}`, { mode: 'no-cors' })
+        .then(() => console.log("GAS Data Sent via GET fallback"))
+        .catch(ge => console.error("GAS GET Fallback Error:", ge));
+    });
   };
 
   const teacherPass = () => {
@@ -1141,7 +1179,7 @@ export default function App() {
     return (
       <div 
         onClick={handleGlobalClick}
-        className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 overflow-x-hidden"
+        className="min-h-screen bg-[#FFF9F0] text-[#5D4037] font-sans selection:bg-[#FF5722]/30 overflow-x-hidden"
       >
         <AnimatePresence>
           {!hasStarted && (
@@ -1180,11 +1218,11 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setState(prev => ({ ...prev, view: 'selection' }))}
-              className="p-2 glass rounded-full hover:bg-white/20"
+              className="p-4 bg-[#FF5722] text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
             >
-              <RotateCcw className="w-5 h-5" />
+              <RotateCcw className="w-8 h-8" />
             </button>
-            <h1 className="font-bungee text-3xl text-blue-400">Penny's Dashboard</h1>
+            <h1 className="font-bungee text-3xl text-[#FF5722]">Penny's Dashboard</h1>
           </div>
           <div className="glass px-6 py-3 rounded-2xl flex items-center gap-3">
             <User className="w-5 h-5 text-blue-400" />
@@ -1217,7 +1255,7 @@ export default function App() {
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
                         <img 
-                          src={`https://api.dicebear.com/7.x/bottts/svg?seed=${s.id}`} 
+                          src={`https://api.dicebear.com/7.x/bottts/svg?seed=${s.id}&backgroundColor=b6e3f4`} 
                           alt={s.name}
                           className="w-10 h-10 rounded-full bg-blue-500/10"
                         />
@@ -1449,9 +1487,16 @@ export default function App() {
                 className="w-full p-4 bg-black/30 border border-white/20 rounded-2xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-lg cursor-pointer"
               >
                 <option value="" disabled>Select your name...</option>
-                {STUDENTS.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
+                <optgroup label="BOYS 👦">
+                  {STUDENTS.filter(s => s.gender === 'boy').map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="GIRLS 👧">
+                  {STUDENTS.filter(s => s.gender === 'girl').map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </optgroup>
               </select>
               <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none rotate-90" />
             </div>
@@ -1466,9 +1511,9 @@ export default function App() {
                   className="flex flex-col items-center gap-4 p-6 glass-dark rounded-[2rem]"
                 >
                   <img 
-                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${selectedStudent.id}`} 
+                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${selectedStudent.id}&backgroundColor=b6e3f4`} 
                     alt={selectedStudent.name}
-                    className="w-32 h-32 rounded-full bg-blue-500/20 p-4 shadow-2xl shadow-blue-500/20"
+                    className="w-32 h-32 rounded-full bg-white/10 p-2 shadow-2xl shadow-blue-500/20 border-4 border-blue-500/30"
                   />
                   <div>
                     <h2 className="font-bungee text-2xl text-blue-400">{selectedStudent.title}</h2>
@@ -1515,9 +1560,9 @@ export default function App() {
                   {STUDENTS.slice(0, 6).map(s => (
                     <img 
                       key={s.id}
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${s.id}`} 
+                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${s.id}&backgroundColor=b6e3f4`} 
                       alt={s.name}
-                      className="w-full aspect-square rounded-xl bg-blue-500/10 p-2"
+                      className="w-full aspect-square rounded-xl bg-white/5 p-1"
                     />
                   ))}
                 </div>
@@ -1535,8 +1580,11 @@ export default function App() {
     return (
       <div 
         onClick={handleGlobalClick}
-        className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 overflow-x-hidden"
+        className="min-h-screen bg-[#1a0f0a] text-slate-100 font-sans selection:bg-orange-500/30 overflow-x-hidden relative"
       >
+        {/* Pizza Crust Background Pattern */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]" />
+        
         <AnimatePresence>
           {!hasStarted && (
             <motion.div 
@@ -1578,9 +1626,9 @@ export default function App() {
               className="relative group"
             >
               <img 
-                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}`} 
+                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}&backgroundColor=b6e3f4`} 
                 alt="Avatar"
-                className="w-16 h-16 rounded-full bg-blue-500/20 border-2 border-blue-500/50 group-hover:scale-110 transition-transform"
+                className="w-16 h-16 rounded-full bg-white/10 border-2 border-orange-500/50 group-hover:scale-110 transition-transform"
               />
               <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border-2 border-slate-950">
                 <RotateCcw className="w-3 h-3 text-white" />
@@ -1647,7 +1695,10 @@ export default function App() {
         </header>
 
         {/* Map Grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto w-full">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto w-full relative">
+          {/* Connecting Path (Pizza Sauce Line) */}
+          <div className="absolute top-1/2 left-0 w-full h-2 bg-orange-600/20 -translate-y-1/2 hidden lg:block z-0" />
+          
           {[0, 1, 2, 3].map((partIdx) => {
             const isUnlocked = partIdx + 1 <= state.unlockedParts;
             const maxLevel = state.unlockedLevels[partIdx] || 1;
@@ -1658,10 +1709,15 @@ export default function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: partIdx * 0.1 }}
-                className={`relative flex flex-col glass rounded-[2.5rem] p-6 border-2 transition-all ${
-                  isUnlocked ? 'border-blue-500/30 bg-blue-500/5' : 'border-white/5 opacity-50 grayscale'
+                className={`relative flex flex-col rounded-[2.5rem] p-8 border-4 transition-all z-10 ${
+                  isUnlocked 
+                    ? 'border-orange-500/50 bg-[#2d1b0d] shadow-[0_0_30px_rgba(249,115,22,0.1)]' 
+                    : 'border-slate-800 bg-slate-900/50 opacity-50 grayscale'
                 }`}
               >
+                {/* Pizza Board Texture Overlay */}
+                <div className="absolute inset-0 opacity-5 pointer-events-none rounded-[2.5rem] bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]" />
+
                 {!isUnlocked && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/40 rounded-[2.5rem] backdrop-blur-[2px]">
                     <div className="bg-slate-900 p-4 rounded-full border border-white/10 shadow-2xl">
@@ -1672,12 +1728,12 @@ export default function App() {
 
                 <div className="mb-6 flex justify-between items-start">
                   <div>
-                    <h3 className="font-bungee text-2xl text-white">PART {partIdx + 1}</h3>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">Mission Segment</p>
+                    <h3 className="font-bungee text-2xl text-orange-400">PART {partIdx + 1}</h3>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pizza Adventure</p>
                   </div>
                   {isUnlocked && (
-                    <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/40">
-                      <Sparkles className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/40">
+                      <Pizza className="w-5 h-5 text-white" />
                     </div>
                   )}
                 </div>
@@ -1696,13 +1752,13 @@ export default function App() {
                           isCompleted 
                             ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
                             : isLvUnlocked && isUnlocked
-                              ? 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
+                              ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-200 border border-orange-500/20'
                               : 'bg-black/20 text-slate-600 border border-transparent'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                            isCompleted ? 'bg-green-500 text-white' : 'bg-slate-800'
+                            isCompleted ? 'bg-green-500 text-white' : 'bg-orange-900/50 text-orange-400'
                           }`}>
                             {lv}
                           </div>
@@ -1907,9 +1963,9 @@ export default function App() {
             className="relative group"
           >
             <img 
-              src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}`} 
+              src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}&backgroundColor=b6e3f4`} 
               alt="Avatar"
-              className="w-14 h-14 rounded-full bg-blue-500/20 border-2 border-blue-500/50 group-hover:scale-110 transition-transform"
+              className="w-14 h-14 rounded-full bg-white/10 border-2 border-orange-500/50 group-hover:scale-110 transition-transform"
             />
             <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border border-slate-950">
               <MapIcon className="w-3 h-3 text-white" />
@@ -2415,7 +2471,7 @@ export default function App() {
                   ) : (
                     <Pizza className="w-6 h-6 animate-bounce" />
                   )}
-                  <span>{state.level === 4 ? "DRINK EARNED!" : "PIZZA SLICE EARNED!"}</span>
+                  <span>{state.level === 4 ? "DRINK EARNED!" : "PART EARNED!"}</span>
                 </motion.div>
               )}
 
