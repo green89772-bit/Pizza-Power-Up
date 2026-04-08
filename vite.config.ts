@@ -6,7 +6,6 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base:'/Pizza-Power-Up/',
     plugins: [react(), tailwindcss()],
     base: './',
     define: {
