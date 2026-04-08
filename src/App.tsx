@@ -11,10 +11,10 @@ import {
   Volume2, 
   VolumeX,
   Trophy, 
-  Pizza, 
   ChevronRight, 
   RotateCcw, 
   ShieldCheck,
+  X,
   User,
   Sparkles,
   CheckCircle2,
@@ -27,7 +27,8 @@ import {
   Lock,
   Map as MapIcon,
   Play,
-  ArrowRight
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -55,7 +56,7 @@ interface GameState {
   transcript: string;
   maxVol: number;
   frequencyData: number[];
-  pizzaProgress: number;
+  adventureProgress: number;
   drinkProgress: number;
   unlockedParts: number;
   unlockedLevels: Record<number, number>; // partIndex -> maxLevelUnlocked (1-4)
@@ -75,7 +76,7 @@ const getSpeechRecognition = () => {
 
 export default function App() {
   const [state, setState] = useState<GameState>(() => {
-    const saved = localStorage.getItem('pizza_power_up_state');
+    const saved = localStorage.getItem('adventure_power_up_state');
     const defaultState: GameState = {
       view: 'selection',
       student: null,
@@ -86,7 +87,7 @@ export default function App() {
       transcript: '',
       maxVol: 0,
       frequencyData: Array(8).fill(0),
-      pizzaProgress: 0,
+      adventureProgress: 0,
       drinkProgress: 0,
       unlockedParts: 1,
       unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
@@ -118,10 +119,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('pizza_power_up_state', JSON.stringify(state));
+    localStorage.setItem('adventure_power_up_state', JSON.stringify(state));
   }, [state]);
 
 
+  const [showRules, setShowRules] = useState(false);
+  
   const recordingStartTimeRef = useRef<number>(0);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -138,7 +141,7 @@ export default function App() {
     if (!ambientAudioRef.current) {
       const audio = new Audio();
       audio.loop = true;
-      audio.volume = 0.3;
+      audio.volume = 0.05;
       audio.crossOrigin = 'anonymous';
       
       audio.onerror = (e) => {
@@ -231,12 +234,12 @@ export default function App() {
             Tap anywhere to start music 🎵
           </motion.div>
         )}
-        <div className={`flex items-center gap-3 glass px-4 py-2 rounded-2xl border transition-all ${state.isMuted ? 'border-white/5 opacity-60' : 'border-orange-500/30 bg-orange-500/5'}`}>
+        <div className={`flex items-center gap-3 glass px-4 py-2 rounded-2xl border transition-all ${state.isMuted ? 'border-white/5 opacity-60' : 'border-blue-500/30 bg-blue-500/5'}`}>
           <div className="flex gap-1 items-end h-4">
             {[1, 2, 3, 4].map(i => (
               <motion.div
                 key={i}
-                className={`w-1.5 rounded-full ${state.isMuted ? 'bg-slate-700' : 'bg-gradient-to-t from-orange-600 to-yellow-400'}`}
+                className={`w-1.5 rounded-full ${state.isMuted ? 'bg-slate-700' : 'bg-gradient-to-t from-blue-600 to-purple-400'}`}
                 animate={audioUnlocked && !state.isMuted ? { height: [4, 16, 8, 12, 4] } : { height: 4 }}
                 transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
               />
@@ -247,10 +250,10 @@ export default function App() {
               animate={audioUnlocked && !state.isMuted ? { rotate: 360 } : { rotate: 0 }}
               transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
             >
-              <Pizza className={`w-4 h-4 ${state.isMuted ? 'text-slate-600' : 'text-orange-500'}`} />
+              <Sparkles className={`w-4 h-4 ${state.isMuted ? 'text-slate-600' : 'text-blue-500'}`} />
             </motion.div>
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${state.isMuted ? 'text-slate-500' : 'text-orange-400'}`}>
-              {state.isMuted ? 'Muted' : (audioUnlocked ? 'Pizza Party!' : 'Paused')}
+            <span className={`text-[10px] font-bold uppercase tracking-widest ${state.isMuted ? 'text-slate-500' : 'text-blue-400'}`}>
+              {state.isMuted ? 'Muted' : (audioUnlocked ? 'Adventure On!' : 'Paused')}
             </span>
           </div>
           <button 
@@ -258,7 +261,7 @@ export default function App() {
               e.stopPropagation();
               setState(prev => ({ ...prev, isMuted: !prev.isMuted }));
             }}
-            className={`p-1.5 rounded-lg transition-colors ${state.isMuted ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-white/10 text-slate-500'}`}
+            className={`p-1.5 rounded-lg transition-colors ${state.isMuted ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-white/10 text-slate-500'}`}
             title={state.isMuted ? "Unmute" : "Mute"}
           >
             {state.isMuted ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
@@ -279,7 +282,7 @@ export default function App() {
     if (!ambientAudioRef.current) {
       const audio = new Audio();
       audio.loop = true;
-      audio.volume = 0.3;
+      audio.volume = 0.05;
       audio.crossOrigin = 'anonymous';
       ambientAudioRef.current = audio;
     }
@@ -374,7 +377,7 @@ export default function App() {
     [key: string]: { 
       level: number, 
       score: number, 
-      pizza: string, 
+      adventure: string, 
       drink: string,
       task: string, 
       part: number,
@@ -385,7 +388,7 @@ export default function App() {
       aiFeedback?: { pronunciation: string, grammar: string, intonation: string }
     } 
   }>(() => {
-    const saved = localStorage.getItem('pizza_power_up_progress');
+    const saved = localStorage.getItem('adventure_power_up_progress');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -398,7 +401,7 @@ export default function App() {
       [key: string]: { 
         level: number, 
         score: number, 
-        pizza: string, 
+        adventure: string, 
         drink: string,
         task: string, 
         part: number,
@@ -413,7 +416,7 @@ export default function App() {
       initial[s.id] = { 
         level: 1, 
         score: 0, 
-        pizza: 'Not Started', 
+        adventure: 'Not Started', 
         drink: '0%',
         task: 'Pending', 
         part: 0,
@@ -428,7 +431,7 @@ export default function App() {
 
   // Persist progress to localStorage
   useEffect(() => {
-    localStorage.setItem('pizza_power_up_progress', JSON.stringify(mockProgress));
+    localStorage.setItem('adventure_power_up_progress', JSON.stringify(mockProgress));
   }, [mockProgress]);
 
   const analyzeWithGemini = async (transcript: string, targetScript: string, studentId: string, score: number, level: number, duration: number) => {
@@ -486,7 +489,7 @@ export default function App() {
             state.student!.name, 
             level, 
             score, 
-            `${Math.floor(state.pizzaProgress)}%`, 
+            `${Math.floor(state.adventureProgress)}%`, 
             state.currentPart, 
             transcript, 
             duration,
@@ -504,7 +507,7 @@ export default function App() {
         state.student!.name, 
         level, 
         score, 
-        `${Math.floor(state.pizzaProgress)}%`, 
+        `${Math.floor(state.adventureProgress)}%`, 
         state.currentPart, 
         transcript, 
         duration
@@ -721,10 +724,10 @@ export default function App() {
     });
   };
 
-  const calculatePizzaProgress = (completedLevels: string[]) => {
-    // 4 parts * 3 levels (1-3) = 12 tasks total for Pizza
-    const pizzaTasks = completedLevels.filter(cl => !cl.endsWith('-4')).length;
-    return (Math.min(pizzaTasks, 12) / 12) * 100;
+  const calculateAdventureProgress = (completedLevels: string[]) => {
+    // 4 parts * 3 levels (1-3) = 12 tasks total for Adventure
+    const adventureTasks = completedLevels.filter(cl => !cl.endsWith('-4')).length;
+    return (Math.min(adventureTasks, 12) / 12) * 100;
   };
 
   const calculateDrinkProgress = (completedLevels: string[]) => {
@@ -776,14 +779,14 @@ export default function App() {
       if (finalScore >= 90 && state.student) {
         const levelKey = `${state.currentPart}-${state.level}`;
         const newCompleted = Array.from(new Set([...state.completedLevels, levelKey]));
-        const newPizza = calculatePizzaProgress(newCompleted);
+        const newAdventure = calculateAdventureProgress(newCompleted);
         const newDrink = calculateDrinkProgress(newCompleted);
         
         // Update local state
         setState(prev => ({
           ...prev,
           completedLevels: newCompleted,
-          pizzaProgress: newPizza,
+          adventureProgress: newAdventure,
           drinkProgress: newDrink,
           // Unlock next level/part if needed
           unlockedLevels: {
@@ -807,7 +810,7 @@ export default function App() {
               score: Math.max(current.score, finalScore),
               completedLevels: newCompleted,
               unlockedLevels: nextLevels,
-              pizza: `${Math.floor(newPizza)}%`,
+              adventure: `${Math.floor(newAdventure)}%`,
               drink: `${Math.floor(newDrink)}%`,
               task: state.level === 4 ? 'Reviewing' : current.task
             }
@@ -837,7 +840,7 @@ export default function App() {
         
         if (isNewCompletion) {
           const newCompleted = [...state.completedLevels, levelKey];
-          const newPizza = calculatePizzaProgress(newCompleted);
+          const newAdventure = calculateAdventureProgress(newCompleted);
           const newDrink = calculateDrinkProgress(newCompleted);
           
           // Unlock Logic
@@ -855,13 +858,13 @@ export default function App() {
           setState(prev => ({ 
             ...prev, 
             completedLevels: newCompleted,
-            pizzaProgress: newPizza,
+            adventureProgress: newAdventure,
             drinkProgress: newDrink,
             unlockedLevels: nextUnlockedLevels,
             unlockedParts: nextUnlockedParts
           }));
 
-          setFeedback("Amazing! You earned a reward! 🍕✨");
+          setFeedback("Amazing! You earned a reward! ✨");
 
           // Update mock progress
           setMockProgress(prev => ({
@@ -869,7 +872,7 @@ export default function App() {
             [state.student!.id]: {
               ...prev[state.student!.id],
               score: finalScore,
-              pizza: `${Math.floor(newPizza)}%`,
+              adventure: `${Math.floor(newAdventure)}%`,
               drink: `${Math.floor(newDrink)}%`,
               completedLevels: newCompleted,
               unlockedLevels: nextUnlockedLevels,
@@ -1003,17 +1006,31 @@ export default function App() {
       isInitializingRef.current = false;
       setIsInitializing(false);
       
-      // If it ended but we thought we were still recording, it's an unexpected stop
+      // If it ended but we thought we were still recording, try to restart it
       if (isRecordingRef.current) {
-        console.warn("Recognition ended unexpectedly while recording.");
-        isRecordingRef.current = false;
-        setState(prev => ({ ...prev, isRecording: false }));
-        stopVisualizer();
+        console.warn("Recognition ended unexpectedly while recording. Attempting restart...");
+        setTimeout(() => {
+          if (isRecordingRef.current) {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.error("Failed to restart recognition", e);
+              // If it fails, we don't necessarily want to stop everything immediately
+              // but if it keeps failing, we might have to.
+            }
+          }
+        }, 300);
       }
     };
 
     recognition.onerror = (event: any) => {
       console.error("Speech error", event.error);
+      
+      if (event.error === 'no-speech') {
+        console.log("No speech detected. Keeping recording state alive.");
+        return; // Don't kill the recording state for no-speech
+      }
+
       isInitializingRef.current = false;
       setIsInitializing(false);
       isRecordingRef.current = false; // MUST reset this on error
@@ -1024,9 +1041,6 @@ export default function App() {
         setFeedback("Mic blocked! Please allow access to record. 🚫");
       } else if (event.error === 'aborted') {
         console.log("Recognition aborted, resetting UI.");
-      } else if (event.error === 'no-speech') {
-        console.log("No speech detected.");
-        // Don't show error for no-speech, but we might want to reset if it stops
       } else {
         setFeedback(`Error: ${event.error}. Let's try again!`);
       }
@@ -1075,7 +1089,7 @@ export default function App() {
     name: string, 
     level: number, 
     score: number, 
-    pizza: string, 
+    adventure: string, 
     part: number, 
     missed: string = "", 
     duration: number,
@@ -1093,7 +1107,7 @@ export default function App() {
       name, 
       level, 
       score, 
-      pizza, 
+      adventure, 
       part, 
       missed, 
       duration: Math.round(duration),
@@ -1127,7 +1141,7 @@ export default function App() {
   const teacherPass = () => {
     const levelKey = `${state.currentPart}-${state.level}`;
     const newCompleted = Array.from(new Set([...state.completedLevels, levelKey]));
-    const newPizza = calculatePizzaProgress(newCompleted);
+    const newAdventure = calculateAdventureProgress(newCompleted);
     const newDrink = calculateDrinkProgress(newCompleted);
     
     const nextLevel = state.level < 3 ? state.level + 1 : state.level;
@@ -1148,7 +1162,7 @@ export default function App() {
       score: 100, 
       completedLevels: newCompleted,
       pendingLevels: newPending,
-      pizzaProgress: newPizza,
+      adventureProgress: newAdventure,
       drinkProgress: newDrink,
       unlockedLevels: nextUnlockedLevels,
       unlockedParts: nextUnlockedParts
@@ -1163,7 +1177,7 @@ export default function App() {
       [state.student!.id]: {
         ...prev[state.student!.id],
         score: 100,
-        pizza: `${Math.floor(newPizza)}%`,
+        adventure: `${Math.floor(newAdventure)}%`,
         drink: `${Math.floor(newDrink)}%`,
         completedLevels: newCompleted,
         pendingLevels: newPending,
@@ -1179,7 +1193,7 @@ export default function App() {
     return (
       <div 
         onClick={handleGlobalClick}
-        className="min-h-screen bg-[#FFF9F0] text-[#5D4037] font-sans selection:bg-[#FF5722]/30 overflow-x-hidden"
+        className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 overflow-x-hidden"
       >
         <AnimatePresence>
           {!hasStarted && (
@@ -1195,10 +1209,10 @@ export default function App() {
                   transition={{ repeat: Infinity, duration: 2 }}
                   className="w-32 h-32 bg-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-blue-500/40"
                 >
-                  <Pizza className="w-16 h-16 text-white" />
+                  <Sparkles className="w-16 h-16 text-white" />
                 </motion.div>
                 <div className="space-y-4">
-                  <h1 className="text-4xl font-black tracking-tighter text-white">PIZZA POWER-UP</h1>
+                  <h1 className="text-4xl font-black tracking-tighter text-white">ADVENTURE POWER-UP</h1>
                   <p className="text-slate-400 font-medium">Get ready for a magical English adventure! 🌟</p>
                 </div>
                 <button
@@ -1218,11 +1232,11 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setState(prev => ({ ...prev, view: 'selection' }))}
-              className="p-4 bg-[#FF5722] text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
+              className="p-4 bg-blue-600 text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
             >
               <RotateCcw className="w-8 h-8" />
             </button>
-            <h1 className="font-bungee text-3xl text-[#FF5722]">Penny's Dashboard</h1>
+            <h1 className="font-bungee text-3xl text-blue-400">Penny's Dashboard</h1>
           </div>
           <div className="glass px-6 py-3 rounded-2xl flex items-center gap-3">
             <User className="w-5 h-5 text-blue-400" />
@@ -1242,7 +1256,7 @@ export default function App() {
                   <th className="px-8 py-6">Best Score</th>
                   <th className="px-8 py-6">Difficult Words</th>
                   <th className="px-8 py-6">Task Status</th>
-                  <th className="px-8 py-6">Pizza Status</th>
+                  <th className="px-8 py-6">Adventure Status</th>
                   <th className="px-8 py-6">Drink Status</th>
                   <th className="px-8 py-6">AI Analysis</th>
                   <th className="px-8 py-6">Teacher Feedback</th>
@@ -1309,7 +1323,7 @@ export default function App() {
                             const newCompleted = Array.from(new Set([...studentProgress.completedLevels, pendingLevel]));
                             const newPending = studentProgress.pendingLevels?.filter(pl => pl !== pendingLevel) || [];
                             const newDrink = calculateDrinkProgress(newCompleted);
-                            const newPizza = calculatePizzaProgress(newCompleted);
+                            const newAdventure = calculateAdventureProgress(newCompleted);
 
                             setMockProgress(prev => ({
                               ...prev,
@@ -1319,12 +1333,12 @@ export default function App() {
                                 completedLevels: newCompleted,
                                 pendingLevels: newPending,
                                 drink: `${Math.floor(newDrink)}%`,
-                                pizza: `${Math.floor(newPizza)}%`
+                                adventure: `${Math.floor(newAdventure)}%`
                               }
                             }));
                             confetti({ particleCount: 50, spread: 50 });
                           }}
-                          className="px-4 py-2 bg-orange-600 text-white rounded-xl font-bold text-xs hover:bg-orange-500 transition-all shadow-lg shadow-orange-500/30 flex items-center gap-2"
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2"
                         >
                           <RotateCcw className="w-3 h-3 animate-spin-slow" />
                           APPROVE TASK
@@ -1345,14 +1359,14 @@ export default function App() {
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${
-                          parseFloat(mockProgress[s.id].pizza) >= 100 ? 'bg-green-500 animate-pulse' :
-                          parseFloat(mockProgress[s.id].pizza) > 0 ? 'bg-orange-500' : 'bg-slate-700'
+                          parseFloat(mockProgress[s.id].adventure) >= 100 ? 'bg-green-500 animate-pulse' :
+                          parseFloat(mockProgress[s.id].adventure) > 0 ? 'bg-blue-500' : 'bg-slate-700'
                         }`} />
                         <span className={`text-sm font-medium ${
-                          parseFloat(mockProgress[s.id].pizza) >= 100 ? 'text-green-400' :
-                          parseFloat(mockProgress[s.id].pizza) > 0 ? 'text-orange-400' : 'text-slate-500'
+                          parseFloat(mockProgress[s.id].adventure) >= 100 ? 'text-green-400' :
+                          parseFloat(mockProgress[s.id].adventure) > 0 ? 'text-blue-400' : 'text-slate-500'
                         }`}>
-                          {mockProgress[s.id].pizza}
+                          {mockProgress[s.id].adventure}
                         </span>
                       </div>
                     </td>
@@ -1441,10 +1455,10 @@ export default function App() {
                   transition={{ repeat: Infinity, duration: 2 }}
                   className="w-32 h-32 bg-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-blue-500/40"
                 >
-                  <Pizza className="w-16 h-16 text-white" />
+                  <Sparkles className="w-16 h-16 text-white" />
                 </motion.div>
                 <div className="space-y-4">
-                  <h1 className="text-4xl font-black tracking-tighter text-white">PIZZA POWER-UP</h1>
+                  <h1 className="text-4xl font-black tracking-tighter text-white">ADVENTURE POWER-UP</h1>
                   <p className="text-slate-400 font-medium">Get ready for a magical English adventure! 🌟</p>
                 </div>
                 <button
@@ -1476,7 +1490,7 @@ export default function App() {
             </button>
           </div>
 
-          <h1 className="font-bungee text-4xl mb-1 text-blue-400 tracking-wider">Pizza Power-Up</h1>
+          <h1 className="font-bungee text-4xl mb-1 text-blue-400 tracking-wider">Adventure Power-Up</h1>
           <p className="text-slate-400 text-[10px] uppercase tracking-[0.3em] mb-8">Created by Teacher Penny</p>
           
           <div className="flex flex-col gap-6">
@@ -1523,21 +1537,22 @@ export default function App() {
                     <button 
                       onClick={() => {
                         const progress = mockProgress[selectedStudent.id];
-                        const pizzaVal = parseFloat(progress.pizza);
+                        const adventureVal = parseFloat(progress.adventure);
                         const drinkVal = parseFloat(progress.drink);
                         setState(prev => ({ 
                           ...prev, 
                           student: selectedStudent, 
-                          view: 'map', 
+                          view: 'map',
                           level: progress.level as Level,
                           currentPart: progress.part,
-                          pizzaProgress: isNaN(pizzaVal) ? 0 : pizzaVal,
+                          adventureProgress: isNaN(adventureVal) ? 0 : adventureVal,
                           drinkProgress: isNaN(drinkVal) ? 0 : drinkVal,
                           unlockedParts: progress.unlockedParts,
                           unlockedLevels: progress.unlockedLevels,
                           completedLevels: progress.completedLevels,
                           pendingLevels: progress.pendingLevels || []
                         }));
+                        setShowRules(true);
                       }}
                       className="flex-1 py-4 bg-blue-600 rounded-2xl font-bold text-xl hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-500/30"
                     >
@@ -1580,12 +1595,67 @@ export default function App() {
     return (
       <div 
         onClick={handleGlobalClick}
-        className="min-h-screen bg-[#1a0f0a] text-slate-100 font-sans selection:bg-orange-500/30 overflow-x-hidden relative"
+        className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 overflow-x-hidden relative"
       >
-        {/* Pizza Crust Background Pattern */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]" />
-        
         <AnimatePresence>
+          {showRules && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="glass p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6"
+              >
+                <div className="w-20 h-20 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-blue-500/20">
+                  <Sparkles className="w-10 h-10 text-white" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="font-bungee text-2xl text-blue-400">Game Rules</h2>
+                  <div className="text-left space-y-4 text-slate-300 text-sm">
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold shrink-0">1</div>
+                      <p>Listen to the script by clicking the speaker icon.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold shrink-0">2</div>
+                      <p>Click the microphone and speak the script clearly.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold shrink-0">3</div>
+                      <p>Earn 90+ points to unlock the next level and get rewards!</p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRules(false);
+                    const progress = mockProgress[state.student!.id];
+                    const adventureVal = parseFloat(progress.adventure);
+                    const drinkVal = parseFloat(progress.drink);
+                    setState(prev => ({ 
+                      ...prev, 
+                      level: progress.level as Level,
+                      currentPart: progress.part,
+                      adventureProgress: isNaN(adventureVal) ? 0 : adventureVal,
+                      drinkProgress: isNaN(drinkVal) ? 0 : drinkVal,
+                      unlockedParts: progress.unlockedParts,
+                      unlockedLevels: progress.unlockedLevels,
+                      completedLevels: progress.completedLevels,
+                      pendingLevels: progress.pendingLevels || []
+                    }));
+                  }}
+                  className="w-full py-4 bg-blue-600 rounded-2xl font-bold text-lg text-white shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-transform"
+                >
+                  LET'S GO!
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+
           {!hasStarted && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -1599,10 +1669,10 @@ export default function App() {
                   transition={{ repeat: Infinity, duration: 2 }}
                   className="w-32 h-32 bg-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-blue-500/40"
                 >
-                  <Pizza className="w-16 h-16 text-white" />
+                  <Sparkles className="w-16 h-16 text-white" />
                 </motion.div>
                 <div className="space-y-4">
-                  <h1 className="text-4xl font-black tracking-tighter text-white">PIZZA POWER-UP</h1>
+                  <h1 className="text-4xl font-black tracking-tighter text-white">ADVENTURE POWER-UP</h1>
                   <p className="text-slate-400 font-medium">Get ready for a magical English adventure! 🌟</p>
                 </div>
                 <button
@@ -1628,7 +1698,7 @@ export default function App() {
               <img 
                 src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}&backgroundColor=b6e3f4`} 
                 alt="Avatar"
-                className="w-16 h-16 rounded-full bg-white/10 border-2 border-orange-500/50 group-hover:scale-110 transition-transform"
+                className="w-16 h-16 rounded-full bg-white/10 border-2 border-blue-500/50 group-hover:scale-110 transition-transform"
               />
               <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border-2 border-slate-950">
                 <RotateCcw className="w-3 h-3 text-white" />
@@ -1641,32 +1711,32 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Pizza Progress */}
+            {/* Progress */}
             <div className="glass p-3 rounded-2xl flex items-center gap-3">
               <div className="relative w-10 h-10 flex items-center justify-center">
-                <Pizza className={`w-6 h-6 transition-all duration-500 ${state.pizzaProgress >= 100 ? 'text-orange-500 animate-bounce' : 'text-slate-600'}`} />
+                <Sparkles className={`w-6 h-6 transition-all duration-500 ${state.adventureProgress >= 100 ? 'text-amber-400 animate-bounce' : 'text-amber-400/20'}`} />
                 <svg className="absolute inset-0 w-10 h-10 -rotate-90" viewBox="0 0 32 32">
                   <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-800" />
                   <motion.circle 
                     cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="2" 
                     strokeDasharray="88" 
                     initial={{ strokeDashoffset: 88 }}
-                    animate={{ strokeDashoffset: 88 - (88 * state.pizzaProgress) / 100 }}
+                    animate={{ strokeDashoffset: 88 - (88 * state.adventureProgress) / 100 }}
                     transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                    className="text-orange-500" strokeLinecap="round" 
+                    className="text-amber-400" strokeLinecap="round" 
                   />
                 </svg>
               </div>
               <div className="flex flex-col">
-                <span className="font-bungee text-xl leading-none">{Math.floor(state.pizzaProgress)}%</span>
-                <span className="text-[8px] uppercase tracking-tighter text-slate-500">Pizza Power</span>
+                <span className="font-bungee text-xl leading-none">{Math.floor(state.adventureProgress)}%</span>
+                <span className="text-[8px] uppercase tracking-tighter text-slate-500">Adventure XP</span>
               </div>
             </div>
 
             {/* Drink Progress */}
             <div className="glass p-3 rounded-2xl flex items-center gap-3">
               <div className="relative w-10 h-10 flex items-center justify-center">
-                <CupSoda className={`w-6 h-6 transition-all duration-500 ${state.drinkProgress >= 100 ? 'text-blue-400 animate-bounce' : 'text-slate-600'}`} />
+                <CupSoda className={`w-6 h-6 transition-all duration-500 ${state.drinkProgress >= 100 ? 'text-purple-400 animate-bounce' : 'text-purple-400/20'}`} />
                 <svg className="absolute inset-0 w-10 h-10 -rotate-90" viewBox="0 0 32 32">
                   <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-800" />
                   <motion.circle 
@@ -1675,7 +1745,7 @@ export default function App() {
                     initial={{ strokeDashoffset: 88 }}
                     animate={{ strokeDashoffset: 88 - (88 * state.drinkProgress) / 100 }}
                     transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                    className="text-blue-400" strokeLinecap="round" 
+                    className="text-purple-400" strokeLinecap="round" 
                   />
                 </svg>
               </div>
@@ -1696,8 +1766,8 @@ export default function App() {
 
         {/* Map Grid */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto w-full relative">
-          {/* Connecting Path (Pizza Sauce Line) */}
-          <div className="absolute top-1/2 left-0 w-full h-2 bg-orange-600/20 -translate-y-1/2 hidden lg:block z-0" />
+          {/* Connecting Path */}
+          <div className="absolute top-1/2 left-0 w-full h-2 bg-blue-600/20 -translate-y-1/2 hidden lg:block z-0" />
           
           {[0, 1, 2, 3].map((partIdx) => {
             const isUnlocked = partIdx + 1 <= state.unlockedParts;
@@ -1711,13 +1781,10 @@ export default function App() {
                 transition={{ delay: partIdx * 0.1 }}
                 className={`relative flex flex-col rounded-[2.5rem] p-8 border-4 transition-all z-10 ${
                   isUnlocked 
-                    ? 'border-orange-500/50 bg-[#2d1b0d] shadow-[0_0_30px_rgba(249,115,22,0.1)]' 
+                    ? 'border-blue-500/50 bg-slate-900/80 shadow-[0_0_30px_rgba(59,130,246,0.1)]' 
                     : 'border-slate-800 bg-slate-900/50 opacity-50 grayscale'
                 }`}
               >
-                {/* Pizza Board Texture Overlay */}
-                <div className="absolute inset-0 opacity-5 pointer-events-none rounded-[2.5rem] bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]" />
-
                 {!isUnlocked && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/40 rounded-[2.5rem] backdrop-blur-[2px]">
                     <div className="bg-slate-900 p-4 rounded-full border border-white/10 shadow-2xl">
@@ -1728,12 +1795,12 @@ export default function App() {
 
                 <div className="mb-6 flex justify-between items-start">
                   <div>
-                    <h3 className="font-bungee text-2xl text-orange-400">PART {partIdx + 1}</h3>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pizza Adventure</p>
+                    <h3 className="font-bungee text-2xl text-blue-400">PART {partIdx + 1}</h3>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">Adventure Path</p>
                   </div>
                   {isUnlocked && (
-                    <div className="w-10 h-10 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/40">
-                      <Pizza className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/40">
+                      <Sparkles className="w-5 h-5 text-white" />
                     </div>
                   )}
                 </div>
@@ -1752,13 +1819,13 @@ export default function App() {
                           isCompleted 
                             ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
                             : isLvUnlocked && isUnlocked
-                              ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-200 border border-orange-500/20'
+                              ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-200 border border-blue-500/20'
                               : 'bg-black/20 text-slate-600 border border-transparent'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                            isCompleted ? 'bg-green-500 text-white' : 'bg-orange-900/50 text-orange-400'
+                            isCompleted ? 'bg-green-500 text-white' : 'bg-blue-900/50 text-blue-400'
                           }`}>
                             {lv}
                           </div>
@@ -1783,14 +1850,14 @@ export default function App() {
                           isCompleted
                             ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
                             : isPending
-                              ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                               : isUnlocked
                                 ? 'bg-purple-500/5 hover:bg-purple-500/10 text-purple-400 border-purple-500/20'
                                 : 'bg-black/20 text-slate-600 border-transparent'
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isCompleted ? 'bg-blue-600' : isPending ? 'bg-orange-600' : 'bg-purple-600'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isCompleted ? 'bg-blue-600' : isPending ? 'bg-blue-500' : 'bg-purple-600'}`}>
                             {isPending ? <RotateCcw className="w-4 h-4 text-white animate-spin-slow" /> : <CupSoda className="w-5 h-5 text-white" />}
                           </div>
                           <div className="text-left">
@@ -1834,10 +1901,10 @@ export default function App() {
                 transition={{ repeat: Infinity, duration: 2 }}
                 className="w-32 h-32 bg-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-blue-500/40"
               >
-                <Pizza className="w-16 h-16 text-white" />
+                <Sparkles className="w-16 h-16 text-white" />
               </motion.div>
               <div className="space-y-4">
-                <h1 className="text-4xl font-black tracking-tighter text-white">PIZZA POWER-UP</h1>
+                <h1 className="text-4xl font-black tracking-tighter text-white">ADVENTURE POWER-UP</h1>
                 <p className="text-slate-400 font-medium">Get ready for a magical English adventure! 🌟</p>
               </div>
               <button
@@ -1870,9 +1937,10 @@ export default function App() {
             >
               <button 
                 onClick={() => setShowHistory(false)}
-                className="absolute top-6 right-6 p-2 glass rounded-full hover:bg-white/20 z-10"
+                className="absolute top-6 right-6 p-3 glass rounded-full hover:bg-white/20 z-10 shadow-lg"
+                title="Back"
               >
-                <RotateCcw className="w-5 h-5 rotate-45" />
+                <ArrowLeft className="w-6 h-6 text-blue-400" />
               </button>
 
               <div className="flex items-center gap-4 mb-8">
@@ -1937,7 +2005,7 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
                         attempt.score >= 90 ? 'bg-green-500/20 text-green-400' : 
-                        attempt.score >= 75 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+                        attempt.score >= 75 ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
                       }`}>
                         {attempt.score}
                       </div>
@@ -1965,7 +2033,7 @@ export default function App() {
             <img 
               src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}&backgroundColor=b6e3f4`} 
               alt="Avatar"
-              className="w-14 h-14 rounded-full bg-white/10 border-2 border-orange-500/50 group-hover:scale-110 transition-transform"
+              className="w-14 h-14 rounded-full bg-white/10 border-2 border-blue-500/50 group-hover:scale-110 transition-transform"
             />
             <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border border-slate-950">
               <MapIcon className="w-3 h-3 text-white" />
@@ -1988,21 +2056,21 @@ export default function App() {
 
           <div className="glass px-3 py-2 rounded-xl flex items-center gap-2">
             <div className="relative w-6 h-6 flex items-center justify-center">
-              <Pizza className={`w-4 h-4 ${state.pizzaProgress >= 100 ? 'text-orange-500' : 'text-slate-600'}`} />
+              <Sparkles className={`w-4 h-4 ${state.adventureProgress >= 100 ? 'text-amber-400' : 'text-amber-400/20'}`} />
               <svg className="absolute inset-0 w-6 h-6 -rotate-90" viewBox="0 0 32 32">
                 <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-800" />
-                <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="88" strokeDashoffset={88 - (88 * state.pizzaProgress) / 100} className="text-orange-500" strokeLinecap="round" />
+                <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="88" strokeDashoffset={88 - (88 * state.adventureProgress) / 100} className="text-amber-400" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="font-bungee text-sm">{Math.floor(state.pizzaProgress)}%</span>
+            <span className="font-bungee text-sm">{Math.floor(state.adventureProgress)}%</span>
           </div>
 
           <div className="glass px-3 py-2 rounded-xl flex items-center gap-2">
             <div className="relative w-6 h-6 flex items-center justify-center">
-              <CupSoda className={`w-4 h-4 ${state.drinkProgress >= 100 ? 'text-blue-400' : 'text-slate-600'}`} />
+              <CupSoda className={`w-4 h-4 ${state.drinkProgress >= 100 ? 'text-purple-400' : 'text-purple-400/20'}`} />
               <svg className="absolute inset-0 w-6 h-6 -rotate-90" viewBox="0 0 32 32">
                 <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-800" />
-                <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="88" strokeDashoffset={88 - (88 * state.drinkProgress) / 100} className="text-blue-400" strokeLinecap="round" />
+                <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="88" strokeDashoffset={88 - (88 * state.drinkProgress) / 100} className="text-purple-400" strokeLinecap="round" />
               </svg>
             </div>
             <span className="font-bungee text-sm">{Math.floor(state.drinkProgress)}%</span>
@@ -2231,7 +2299,7 @@ export default function App() {
               >
                 <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className={`p-2 rounded-lg ${state.score >= 90 ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                    <div className={`p-2 rounded-lg ${state.score >= 90 ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`}>
                       {state.score >= 90 ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
                     </div>
                     <h3 className="text-lg font-bold text-white">Analysis Report</h3>
@@ -2451,7 +2519,7 @@ export default function App() {
                 <div className="text-7xl font-bungee text-blue-400">{state.score}</div>
               </div>
 
-              <div className={`p-4 rounded-2xl mb-4 flex items-center gap-3 justify-center ${state.score >= 90 ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'}`}>
+              <div className={`p-4 rounded-2xl mb-4 flex items-center gap-3 justify-center ${state.score >= 90 ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
                 {state.score >= 90 ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
                 <span className="font-bold">{feedback}</span>
               </div>
@@ -2462,14 +2530,14 @@ export default function App() {
                   animate={{ scale: 1 }}
                   className={`flex items-center justify-center gap-2 font-bold mb-6 p-3 rounded-2xl border ${
                     state.level === 4 
-                      ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' 
-                      : 'text-orange-400 bg-orange-500/10 border-orange-500/20'
+                      ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' 
+                      : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
                   }`}
                 >
                   {state.level === 4 ? (
                     <CupSoda className="w-6 h-6 animate-bounce" />
                   ) : (
-                    <Pizza className="w-6 h-6 animate-bounce" />
+                    <Sparkles className="w-6 h-6 animate-bounce" />
                   )}
                   <span>{state.level === 4 ? "DRINK EARNED!" : "PART EARNED!"}</span>
                 </motion.div>
@@ -2501,7 +2569,7 @@ export default function App() {
         <div>Created by Teacher Penny</div>
         <div className="flex items-center gap-2">
           <Sparkles className="w-3 h-3" />
-          Powered by Pizza Power-Up Engine
+          Powered by Adventure Power-Up Engine
         </div>
       </footer>
       <MusicIndicator />

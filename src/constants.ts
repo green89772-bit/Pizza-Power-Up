@@ -63,6 +63,7 @@ export const STUDENTS: StudentScript[] = [
     topic: "Food Waste",
     title: "Food Saver Eason",
     gender: "boy",
+    loomUrl: "https://www.loom.com/share/e069d4d499b248ceb124edcc5f7c03d3",
     scripts: [
       { text: "Hello everyone! My name is Eason. Have you ever thought about where your food goes after you throw it away? Today, I want to talk to you about a very big problem: food waste. During my summer vacation, I looked in my kitchen and saw many things we bought but never used. They were all expired!", pitch: 1.1, rate: 1.0 },
       { text: "It reminded me of a story from when I was little. I didn't know what \"expired\" meant, so I accidentally ate some old yogurt. The next day, my stomach hurt so much! I had to stay in the bathroom all day and I felt terrible. That painful experience taught me a very important lesson.", pitch: 0.85, rate: 0.85 },
@@ -146,6 +147,7 @@ export const STUDENTS: StudentScript[] = [
     topic: "Stray Animals",
     title: "Animal Friend Vincent",
     gender: "boy",
+    loomUrl: "https://www.loom.com/share/3d01c1f8fef44be985a5190fde749fa8",
     scripts: [
       { text: "Hello everyone! My name is **Vincent**. Imagine a **perfect city** ▲ where every **stray animal** ▲ has a **warm bed** ▲ and a **full bowl of food** ▲. Sadly, our **reality** ▲ in Taichung is **quite different** ▲. When I look around, I see **sad dogs** ▲ and **trash** ▲ on the streets. It makes me feel **very sad** ▲ because animals are **not toys** ▲; they **feel pain** ▲ and they **feel lonely** ▲ just like us.", pitch: 1.1, rate: 1.0 },
       { text: "During **Chinese New Year** ▲, I saw many dogs **wandering** ▲ on the street. I even saw some **kind people** ▲ gave them food because they didn't want them to **starve** ▲. I learned that many dogs are **abandoned** ▲ by their owners when they become a **burden** ▲. This is a **very big problem** ▲. If you have a pet, please **never give up** ▲ on them.", pitch: 0.85, rate: 0.85 },
@@ -215,6 +217,7 @@ export const STUDENTS: StudentScript[] = [
     topic: "Plastic Pollution",
     title: "River Guard Zac",
     gender: "boy",
+    loomUrl: "https://www.loom.com/share/da1472b7ae5a4c6eb50d0dcfe400398e",
     scripts: [
       { text: "Hello everyone! My name is **Zac**. Today, I want to talk about a **small thing** ▲ that creates a **big problem** ▲ in Taichung: **plastic bags** ▲. One day, on my way home from school, I saw a **big pile of plastic bags** ▲ near a drain. I decided to **stop** ▲ and **count them** ▲.", pitch: 1.1, rate: 1.0 },
       { text: "I found **so many bags** ▲ in just one spot! It made me think: if **every person** ▲ in Taichung keeps using plastic bags **every day** ▲, our Earth will soon be **full of trash** ▲. We see them in our **parks** ▲ and on our **streets** ▲. This is a **problem** ▲ we **cannot ignore** ▲ anymore.", pitch: 0.9, rate: 0.9 },
@@ -228,6 +231,7 @@ export const STUDENTS: StudentScript[] = [
     topic: "Food Waste",
     title: "Food Warrior Jeremy",
     gender: "boy",
+    loomUrl: "https://www.loom.com/share/1c52a55b7e5b4b1b8ee0b7d86f6c7976",
     scripts: [
       { text: "Hello everyone! My name is **Jeremy**. Have you ever **thought** ▲ about where your **food goes** ▲ after you **throw it away** (↑)? During my **Chinese New Year holiday** ▲, I noticed a **big problem** ▲ in Taichung. I saw **so much food waste** ▲! Some people threw away food that was **expired** ▲, and others just **didn't finish their meals** ▲.", pitch: 1.1, rate: 1.0 },
       { text: "This made me feel **very sad** ▲ for our **resources** ▲. Did you know that Taichung is **producing more food waste** ▲ than we can eat? When we **waste food** ▲, it **destroys our environment** ▲ and even creates **bad air** ▲ for our beautiful city. We must **stop this right now** ▲!", pitch: 0.85, rate: 0.85 },
@@ -241,6 +245,7 @@ export const STUDENTS: StudentScript[] = [
     topic: "Air Quality",
     title: "Air Guardian Emma",
     gender: "girl",
+    loomUrl: "https://www.loom.com/share/6ca3eba7f63f4d9a9cc772722a8206f1",
     scripts: [
       { text: "Hello everyone! My name is **Emma**. Did you know that Taichung’s **temperature** ▲ is getting **hotter every year** ▲? This is happening because of **air pollution** ▲ and **global warming** ▲. Today, I want to **speak up** ▲ for our **health** ▲ and our **home** ▲.", pitch: 1.1, rate: 1.0 },
       { text: "During my **winter vacation** ▲, I realized we needed to start with our **own family's pollution** ▲. Since we have a **motorcycle** ▲, my father and I decided to **check the health condition** ▲ of our motorcycle. We found out that if the engine is **not well maintained** ▲, it could be pumping out **thick, black smoke** ▲ into the air. This made me realize that even a **single personal vehicle** ▲ can be a **big part of the problem** ▲.", pitch: 0.9, rate: 0.9 },
