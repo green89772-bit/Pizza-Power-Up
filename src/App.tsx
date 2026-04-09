@@ -1243,7 +1243,7 @@ function AppContent() {
     duration: number,
     aiFeedback?: { pronunciation: string, grammar: string, intonation: string }
   ) => {
-    const url = "https://script.google.com/macros/s/AKfycbya-Y49kWLuu1VBFRzA-8RA6kLAMacTukwRWfAgYhoYpHNUMzwh5t9TWvzOrB-730Gw/exec";
+    const url = "https://script.google.com/macros/s/AKfycbyd8ogElEFB9jeZJ8MtntSS8HqI_ewIypi8kyT6s2WWL6_O9pkIEKoPb2q5mbdkN2Kd/exec";
     
     // Filter out very short or zero-score attempts to avoid "junk" data
     if (duration < 3 && score === 0) {
