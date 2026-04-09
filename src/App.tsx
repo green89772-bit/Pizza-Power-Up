@@ -144,6 +144,7 @@ interface GameState {
   teacherFeedback: Record<string, string>; // studentId -> feedback text
   aiFeedback: Record<string, { pronunciation: string, grammar: string, intonation: string }>; // studentId -> AI feedback
   isMuted: boolean;
+  isAnalyzingAI: boolean;
 }
 
 // --- Speech Recognition Setup ---
@@ -182,6 +183,7 @@ function AppContent() {
       teacherFeedback: {},
       aiFeedback: {},
       isMuted: false,
+      isAnalyzingAI: false,
     };
     return defaultState;
   });
@@ -573,6 +575,8 @@ function AppContent() {
       return;
     }
 
+    setState(prev => ({ ...prev, isAnalyzingAI: true }));
+
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
@@ -580,9 +584,15 @@ function AppContent() {
         contents: `Analyze this student's English speaking practice. 
         Target Script: "${targetScript}"
         Student Transcript: "${transcript}"
+        Missed Words: ${missed.join(', ')}
+        
         Provide feedback in JSON format with fields: pronunciation, grammar, intonation. 
-        Keep it encouraging and simple for a child. 
-        Example: {"pronunciation": "Great job on the 'th' sounds!", "grammar": "Perfect sentence structure!", "intonation": "Very expressive!"}`,
+        Keep it encouraging and simple for a child (age 6-10). 
+        - Pronunciation: Focus on the sounds in the missed words.
+        - Grammar: Comment on sentence structure.
+        - Intonation: Comment on the flow and expression.
+        
+        Example: {"pronunciation": "Great job! Try to say 'the' more clearly.", "grammar": "You followed the sentence perfectly!", "intonation": "You sound very happy and expressive!"}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -602,6 +612,7 @@ function AppContent() {
           const feedback = JSON.parse(response.text.trim());
           setState(prev => ({
             ...prev,
+            isAnalyzingAI: false,
             aiFeedback: {
               ...prev.aiFeedback,
               [studentId]: feedback
@@ -648,7 +659,21 @@ function AppContent() {
       }
     } catch (e) {
       console.error("Gemini analysis failed", e);
-      // Still send to GAS even if AI fails
+      
+      // Fallback feedback if AI fails
+      const fallbackFeedback = {
+        pronunciation: missed.length > 0 ? `Keep practicing these words: ${missed.slice(0, 3).join(', ')}!` : "Your pronunciation is getting better!",
+        grammar: score > 80 ? "Great sentence structure!" : "Try to follow the words on the screen.",
+        intonation: "Good effort! Keep speaking with confidence!"
+      };
+
+      setState(prev => ({ 
+        ...prev, 
+        isAnalyzingAI: false,
+        aiFeedback: { ...prev.aiFeedback, [studentId]: fallbackFeedback }
+      }));
+
+      // Still send to GAS with fallback
       sendToGAS(
         state.student!.name, 
         level, 
@@ -656,10 +681,11 @@ function AppContent() {
         `${Math.floor(state.adventureProgress)}%`, 
         state.currentPart + 1, 
         missed.join(', '), 
-        duration
+        duration,
+        fallbackFeedback
       );
 
-      // Save to Firebase History even if AI fails
+      // Save to Firebase History
       addDoc(collection(db, 'history'), {
         studentId,
         part: state.currentPart + 1,
@@ -668,7 +694,8 @@ function AppContent() {
         date: new Date().toLocaleDateString(),
         timestamp: serverTimestamp(),
         transcript,
-        missed
+        missed,
+        aiFeedback: fallbackFeedback
       }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
     }
   };
@@ -842,13 +869,38 @@ function AppContent() {
     const usedIndices = new Set();
     const missed: string[] = [];
     
+    // Levenshtein distance for fuzzy matching
+    const getLevenshteinDistance = (a: string, b: string) => {
+      const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+      for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+      for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+        }
+      }
+      return matrix[a.length][b.length];
+    };
+
     targetWords.forEach(tw => {
-      const idx = sWords.findIndex((sw, i) => sw === tw && !usedIndices.has(i));
+      // Try exact match first
+      let idx = sWords.findIndex((sw, i) => sw === tw && !usedIndices.has(i));
+      
+      // If no exact match, try fuzzy match for longer words
+      if (idx === -1 && tw.length > 3) {
+        idx = sWords.findIndex((sw, i) => {
+          if (usedIndices.has(i)) return false;
+          const dist = getLevenshteinDistance(sw, tw);
+          return dist <= 1; // Allow 1 character difference
+        });
+      }
+
       if (idx !== -1) {
         matches++;
         usedIndices.add(idx);
       } else {
-        if (tw.length > 3) missed.push(tw); // Only track significant words
+        missed.push(tw); // Track ALL missed words now
       }
     });
 
@@ -861,7 +913,7 @@ function AppContent() {
     else if (rawScore < 85) finalScore = Math.floor(((rawScore - 70) / 15) * 5) + 90;
     else if (rawScore >= 85) finalScore = Math.min(100, Math.floor(((rawScore - 85) / 15) * 5) + 95);
     
-    return { score: finalScore, missed: Array.from(new Set(missed)).slice(0, 5) };
+    return { score: finalScore, missed: Array.from(new Set(missed)).slice(0, 10) }; // Show up to 10 missed words
   };
 
   const saveAttempt = (studentId: string, score: number, level: number) => {
@@ -2488,28 +2540,41 @@ function AppContent() {
                     )}
 
                     {/* AI Feedback Section */}
-                    {state.aiFeedback[state.student!.id] && (
-                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center gap-2 mb-2">
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-blue-400" />
                           <p className="text-blue-400 text-[10px] font-bold uppercase tracking-widest">AI Analysis Feedback:</p>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-1">
-                            <p className="text-slate-400 text-[10px] uppercase font-bold">Pronunciation</p>
-                            <p className="text-white text-xs leading-relaxed">{state.aiFeedback[state.student!.id].pronunciation}</p>
+                        {state.isAnalyzingAI && (
+                          <div className="flex items-center gap-2 text-[10px] text-blue-400 animate-pulse">
+                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
+                            Analyzing...
                           </div>
-                          <div className="space-y-1">
-                            <p className="text-slate-400 text-[10px] uppercase font-bold">Grammar</p>
-                            <p className="text-white text-xs leading-relaxed">{state.aiFeedback[state.student!.id].grammar}</p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-slate-400 text-[10px] uppercase font-bold">Intonation</p>
-                            <p className="text-white text-xs leading-relaxed">{state.aiFeedback[state.student!.id].intonation}</p>
-                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-slate-400 text-[10px] uppercase font-bold">Pronunciation</p>
+                          <p className="text-white text-xs leading-relaxed">
+                            {state.aiFeedback[state.student!.id]?.pronunciation || (state.isAnalyzingAI ? "Waiting for AI..." : "N/A")}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-slate-400 text-[10px] uppercase font-bold">Grammar</p>
+                          <p className="text-white text-xs leading-relaxed">
+                            {state.aiFeedback[state.student!.id]?.grammar || (state.isAnalyzingAI ? "Waiting for AI..." : "N/A")}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-slate-400 text-[10px] uppercase font-bold">Intonation</p>
+                          <p className="text-white text-xs leading-relaxed">
+                            {state.aiFeedback[state.student!.id]?.intonation || (state.isAnalyzingAI ? "Waiting for AI..." : "N/A")}
+                          </p>
                         </div>
                       </div>
-                    )}
+                    </div>
 
                     {/* Scoring Criteria Section */}
                     <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/30">
