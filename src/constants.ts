@@ -259,6 +259,7 @@ export const STUDENTS: StudentScript[] = [
     topic: "Stray Animals",
     title: "Animal Voice Dora",
     gender: "girl",
+    loomUrl: "https://www.loom.com/share/f0bacd413705437190268345100c169b",
     scripts: [
       { text: "Hello everyone! My name is **Dora**. I have a **question** ▲ for you: What would you do if you were **left alone in the rain** ▲ without an umbrella? You would feel **cold** (↑), **scared** (↑), and **very lonely** ▲. Sadly, that is the **daily reality** ▲ for thousands of **stray animals** ▲ in Taichung.", pitch: 1.1, rate: 1.0 },
       { text: "This winter, I saw a **group of stray dogs and cats** ▲. They were **very dirty** ▲ and they **smelled bad** ▲ because they had no one to wash them. I felt **so sorry** ▲ for them because they were **suffering in the cold** ▲. Later, they were taken to an **animal shelter** ▲. I was **happy** ▲ because they finally had a **warm home** ▲.", pitch: 0.85, rate: 0.85 },

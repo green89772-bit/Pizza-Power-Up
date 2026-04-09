@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "studentProgress": {
+      "title": "Student Progress",
+      "description": "Stores the progress, scores, and history for each student.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "adventureProgress": { "type": "number" },
+        "drinkProgress": { "type": "number" },
+        "unlockedParts": { "type": "number" },
+        "unlockedLevels": { "type": "object" },
+        "completedLevels": { "type": "array" },
+        "pendingLevels": { "type": "array" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "adventureProgress", "drinkProgress"]
+    },
+    "practiceHistory": {
+      "title": "Practice History",
+      "description": "Stores individual practice attempts for a student.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "part": { "type": "number" },
+        "level": { "type": "number" },
+        "score": { "type": "number" },
+        "date": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "part", "level", "score"]
+    }
+  },
+  "firestore": {
+    "/progress/{studentId}": {
+      "schema": "studentProgress",
+      "description": "Real-time progress for each student."
+    },
+    "/history/{historyId}": {
+      "schema": "practiceHistory",
+      "description": "Historical practice attempts."
+    }
+  }
+}

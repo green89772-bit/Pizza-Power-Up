@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidNumber(field, minVal, maxVal) {
+      return request.resource.data[field] is number &&
+        request.resource.data[field] >= minVal &&
+        request.resource.data[field] <= maxVal;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidProgress() {
+      return request.resource.data.keys().hasAll(['studentId', 'adventureProgress', 'drinkProgress']) &&
+             isValidString('studentId', 1, 100) &&
+             isValidNumber('adventureProgress', 0, 100) &&
+             isValidNumber('drinkProgress', 0, 100);
+    }
+
+    function isValidHistory() {
+      return request.resource.data.keys().hasAll(['studentId', 'part', 'level', 'score']) &&
+             isValidString('studentId', 1, 100) &&
+             isValidNumber('part', 1, 4) &&
+             isValidNumber('level', 1, 4) &&
+             isValidNumber('score', 0, 100);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    // Allowing public access for educational use as Anonymous Auth is restricted in console
+    // Validation ensures data integrity
+    match /progress/{studentId} {
+      allow read: if true;
+      allow write: if isValidProgress();
+    }
+
+    match /history/{historyId} {
+      allow read: if true;
+      allow write: if isValidHistory();
+    }
+  }
+}

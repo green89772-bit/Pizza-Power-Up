@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mic, 
@@ -40,10 +40,88 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import confetti from 'canvas-confetti';
+import { initializeApp } from 'firebase/app';
 import { GoogleGenAI, Type } from "@google/genai";
+import { doc, setDoc, onSnapshot, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from './firebase';
 import { STUDENTS, StudentScript } from './constants';
 
 // --- Types ---
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: any;
+}
+
+const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+};
+
+// --- Error Boundary ---
+interface EBProps { children: ReactNode; }
+interface EBState { hasError: boolean; error: Error | null; }
+class ErrorBoundary extends Component<EBProps, EBState> {
+  public state: EBState = { hasError: false, error: null };
+  public static getDerivedStateFromError(error: Error): EBState {
+    return { hasError: true, error };
+  }
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Uncaught error:', error, errorInfo);
+  }
+  public render() {
+    const { hasError, error } = this.state;
+    if (hasError) {
+      let errorMessage = "Something went wrong.";
+      try {
+        const msg = error?.message || "";
+        if (msg.startsWith('{')) {
+          const parsed = JSON.parse(msg);
+          if (parsed.error) errorMessage = `Firebase Error: ${parsed.error}`;
+        } else {
+          errorMessage = msg;
+        }
+      } catch (e) {}
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-center">
+          <div className="max-w-md space-y-6 glass p-8 rounded-3xl border border-red-500/20">
+            <div className="w-20 h-20 bg-red-500/20 rounded-2xl mx-auto flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-red-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-white">Oops! An error occurred</h2>
+            <p className="text-slate-400">{errorMessage}</p>
+            <button onClick={() => window.location.reload()} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all">
+              Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (this as any).props.children;
+  }
+}
+
 type Level = 1 | 2 | 3 | 4;
 
 interface GameState {
@@ -75,8 +153,15 @@ const getSpeechRecognition = () => {
 };
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [state, setState] = useState<GameState>(() => {
-    const saved = localStorage.getItem('adventure_power_up_state');
     const defaultState: GameState = {
       view: 'selection',
       student: null,
@@ -98,29 +183,77 @@ export default function App() {
       aiFeedback: {},
       isMuted: false,
     };
-
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          ...defaultState,
-          ...parsed,
-          // Always reset transient recording state on load
-          isRecording: false,
-          transcript: '',
-          maxVol: 0,
-          frequencyData: Array(8).fill(0),
-        };
-      } catch (e) {
-        console.error("Failed to parse saved state", e);
-      }
-    }
     return defaultState;
   });
 
+  // --- Firebase Sync Logic ---
   useEffect(() => {
-    localStorage.setItem('adventure_power_up_state', JSON.stringify(state));
-  }, [state]);
+    if (!state.student) return;
+
+    const studentId = state.student.id;
+    const progressRef = doc(db, 'progress', studentId);
+
+    // Listen for remote changes
+    const unsubscribe = onSnapshot(progressRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setState(prev => {
+          // Only update if remote is different and we are not in a critical state
+          if (prev.student?.id === studentId) {
+            return {
+              ...prev,
+              adventureProgress: data.adventureProgress ?? prev.adventureProgress,
+              drinkProgress: data.drinkProgress ?? prev.drinkProgress,
+              unlockedParts: data.unlockedParts ?? prev.unlockedParts,
+              unlockedLevels: data.unlockedLevels ?? prev.unlockedLevels,
+              completedLevels: data.completedLevels ?? prev.completedLevels,
+              pendingLevels: data.pendingLevels ?? prev.pendingLevels,
+              teacherFeedback: {
+                ...prev.teacherFeedback,
+                [studentId]: data.teacherFeedback ?? prev.teacherFeedback[studentId]
+              }
+            };
+          }
+          return prev;
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `progress/${studentId}`);
+    });
+
+    return () => unsubscribe();
+  }, [state.student?.id]);
+
+  // Save progress to Firebase whenever it changes locally
+  useEffect(() => {
+    if (!state.student) return;
+
+    const studentId = state.student.id;
+    const progressRef = doc(db, 'progress', studentId);
+
+    const dataToSave = {
+      studentId,
+      adventureProgress: state.adventureProgress,
+      drinkProgress: state.drinkProgress,
+      unlockedParts: state.unlockedParts,
+      unlockedLevels: state.unlockedLevels,
+      completedLevels: state.completedLevels,
+      pendingLevels: state.pendingLevels,
+      teacherFeedback: state.teacherFeedback[studentId] || "",
+      lastUpdated: serverTimestamp()
+    };
+
+    setDoc(progressRef, dataToSave, { merge: true })
+      .catch(err => handleFirestoreError(err, OperationType.WRITE, `progress/${studentId}`));
+  }, [
+    state.adventureProgress, 
+    state.drinkProgress, 
+    state.unlockedParts, 
+    state.unlockedLevels, 
+    state.completedLevels, 
+    state.pendingLevels,
+    state.student?.id
+  ]);
 
 
   const [showRules, setShowRules] = useState(false);
@@ -434,7 +567,7 @@ export default function App() {
     localStorage.setItem('adventure_power_up_progress', JSON.stringify(mockProgress));
   }, [mockProgress]);
 
-  const analyzeWithGemini = async (transcript: string, targetScript: string, studentId: string, score: number, level: number, duration: number) => {
+  const analyzeWithGemini = async (transcript: string, targetScript: string, studentId: string, score: number, level: number, duration: number, missed: string[]) => {
     if (!transcript || transcript.length < 2) {
       console.log("Transcript too short for AI analysis");
       return;
@@ -490,11 +623,24 @@ export default function App() {
             level, 
             score, 
             `${Math.floor(state.adventureProgress)}%`, 
-            state.currentPart, 
-            transcript, 
+            state.currentPart + 1, 
+            missed.join(', '), 
             duration,
             feedback
           );
+
+          // Save to Firebase History
+          addDoc(collection(db, 'history'), {
+            studentId,
+            part: state.currentPart + 1,
+            level,
+            score,
+            date: new Date().toLocaleDateString(),
+            timestamp: serverTimestamp(),
+            aiFeedback: feedback,
+            transcript,
+            missed
+          }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
         } catch (parseError) {
           console.error("JSON Parse error in AI feedback", parseError, response.text);
           throw parseError;
@@ -508,10 +654,22 @@ export default function App() {
         level, 
         score, 
         `${Math.floor(state.adventureProgress)}%`, 
-        state.currentPart, 
-        transcript, 
+        state.currentPart + 1, 
+        missed.join(', '), 
         duration
       );
+
+      // Save to Firebase History even if AI fails
+      addDoc(collection(db, 'history'), {
+        studentId,
+        part: state.currentPart + 1,
+        level,
+        score,
+        date: new Date().toLocaleDateString(),
+        timestamp: serverTimestamp(),
+        transcript,
+        missed
+      }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
     }
   };
 
@@ -825,7 +983,8 @@ export default function App() {
         state.student!.id,
         finalScore,
         state.level,
-        duration
+        duration,
+        missed
       );
       
       // Save to history
@@ -895,17 +1054,6 @@ export default function App() {
       } else {
         setFeedback("I didn't hear you clearly. Try again! 🎙️");
       }
-
-      // Send to GAS for tracking
-      sendToGAS(
-        state.student!.name, 
-        state.level, 
-        finalScore, 
-        finalScore >= 90 ? "YES" : "NO",
-        state.currentPart + 1,
-        missed.join(', '),
-        duration
-      );
     } else {
       // START LOGIC
       if (isInitializingRef.current) return;
@@ -1120,21 +1268,22 @@ export default function App() {
     
     console.log("Sending data to GAS:", data);
 
-    fetch(url, {
-      method: 'POST',
+    // Use query params for better reliability with no-cors and GAS doGet/doPost
+    const queryParams = new URLSearchParams(data as any).toString();
+    fetch(`${url}?${queryParams}`, {
+      method: 'GET',
       mode: 'no-cors',
-      cache: 'no-cache',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      cache: 'no-cache'
     })
-    .then(() => console.log("GAS Data Sent (no-cors mode)"))
+    .then(() => console.log("GAS Data Sent via GET"))
     .catch(e => {
       console.error("GAS Log Error:", e);
-      // Fallback to GET if POST fails (some GAS scripts are set up for doGet)
-      const queryParams = new URLSearchParams(data as any).toString();
-      fetch(`${url}?${queryParams}`, { mode: 'no-cors' })
-        .then(() => console.log("GAS Data Sent via GET fallback"))
-        .catch(ge => console.error("GAS GET Fallback Error:", ge));
+      // Fallback to POST if GET fails
+      fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify(data)
+      }).then(() => console.log("GAS Data Sent via POST fallback"));
     });
   };
 
