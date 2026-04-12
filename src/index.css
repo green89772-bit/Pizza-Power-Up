@@ -32,6 +32,17 @@
   .energy-ball.loud {
     @apply scale-[1.4] from-orange-400 to-yellow-500 shadow-[0_0_60px_rgba(249,115,22,0.8)];
   }
+
+  .pizza-dance {
+    animation: pizza-dance 0.8s infinite ease-in-out;
+  }
+}
+
+@keyframes pizza-dance {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+  25% { transform: translateY(-4px) rotate(-10deg) scale(1.1); }
+  50% { transform: translateY(0) rotate(0deg) scale(1); }
+  75% { transform: translateY(-4px) rotate(10deg) scale(1.1); }
 }
 
 /* Custom scrollbar */

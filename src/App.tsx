@@ -10,6 +10,7 @@ import {
   MicOff, 
   Volume2, 
   VolumeX,
+  Loader2,
   Trophy, 
   ChevronRight, 
   RotateCcw, 
@@ -41,8 +42,8 @@ import {
 } from 'recharts';
 import confetti from 'canvas-confetti';
 import { initializeApp } from 'firebase/app';
-import { GoogleGenAI, Type } from "@google/genai";
-import { doc, setDoc, onSnapshot, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { doc, setDoc, onSnapshot, collection, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { STUDENTS, StudentScript } from './constants';
 
@@ -56,6 +57,8 @@ enum OperationType {
   WRITE = 'write',
 }
 
+let isQuotaExceededGlobal = false;
+
 interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
@@ -64,8 +67,22 @@ interface FirestoreErrorInfo {
 }
 
 const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
+  // Check for quota exceeded
+  if (errorMessage.includes('resource-exhausted') || errorMessage.includes('Quota exceeded')) {
+    if (!isQuotaExceededGlobal) {
+      console.warn('Firestore Quota Exceeded. Data will not be synced to cloud until reset.');
+      isQuotaExceededGlobal = true;
+    }
+    // We don't want to crash the whole app for a background sync quota issue
+    if (operationType === OperationType.WRITE || operationType === OperationType.CREATE || operationType === OperationType.GET) {
+      return; 
+    }
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -98,7 +115,13 @@ class ErrorBoundary extends Component<EBProps, EBState> {
         const msg = error?.message || "";
         if (msg.startsWith('{')) {
           const parsed = JSON.parse(msg);
-          if (parsed.error) errorMessage = `Firebase Error: ${parsed.error}`;
+          if (parsed.error) {
+            if (parsed.error.includes('resource-exhausted') || parsed.error.includes('Quota exceeded')) {
+              errorMessage = "Firestore Quota Exceeded! 📊 The free limit for today has been reached. Your progress will be saved locally, but cloud sync will resume tomorrow. You can still continue practicing!";
+            } else {
+              errorMessage = `Firebase Error: ${parsed.error}`;
+            }
+          }
         } else {
           errorMessage = msg;
         }
@@ -125,7 +148,7 @@ class ErrorBoundary extends Component<EBProps, EBState> {
 type Level = 1 | 2 | 3 | 4;
 
 interface GameState {
-  view: 'selection' | 'game' | 'teacher' | 'task' | 'map';
+  view: 'selection' | 'game' | 'teacher' | 'task' | 'map' | 'admin';
   student: StudentScript | null;
   level: Level;
   currentPart: number;
@@ -226,9 +249,9 @@ function AppContent() {
     return () => unsubscribe();
   }, [state.student?.id]);
 
-  // Save progress to Firebase whenever it changes locally
+  // Save progress to Firebase whenever it changes locally (with debounce)
   useEffect(() => {
-    if (!state.student) return;
+    if (!state.student || isQuotaExceededGlobal) return;
 
     const studentId = state.student.id;
     const progressRef = doc(db, 'progress', studentId);
@@ -245,8 +268,13 @@ function AppContent() {
       lastUpdated: serverTimestamp()
     };
 
-    setDoc(progressRef, dataToSave, { merge: true })
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `progress/${studentId}`));
+    const timer = setTimeout(() => {
+      if (isQuotaExceededGlobal) return;
+      setDoc(progressRef, dataToSave, { merge: true })
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `progress/${studentId}`));
+    }, 3000); // 3 second debounce to save quota
+
+    return () => clearTimeout(timer);
   }, [
     state.adventureProgress, 
     state.drinkProgress, 
@@ -259,6 +287,33 @@ function AppContent() {
 
 
   const [showRules, setShowRules] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+
+  const handleAdminLogin = () => {
+    const pass = prompt("Please enter Teacher Password:");
+    if (pass === "1234") { // Default password, can be changed
+      setIsAdminAuthenticated(true);
+      setState(prev => ({ ...prev, view: 'admin' }));
+    } else {
+      alert("Wrong password!");
+    }
+  };
+
+  const updateStudentProgress = async (studentId: string, updates: any) => {
+    try {
+      const progressRef = doc(db, 'progress', studentId);
+      await setDoc(progressRef, {
+        ...updates,
+        studentId,
+        lastUpdated: serverTimestamp()
+      }, { merge: true });
+      alert("Progress updated successfully! 🌟");
+    } catch (error) {
+      console.error("Failed to update progress", error);
+      alert("Update failed. Please check connection.");
+    }
+  };
   
   const recordingStartTimeRef = useRef<number>(0);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -641,17 +696,19 @@ function AppContent() {
           );
 
           // Save to Firebase History
-          addDoc(collection(db, 'history'), {
-            studentId,
-            part: state.currentPart + 1,
-            level,
-            score,
-            date: new Date().toLocaleDateString(),
-            timestamp: serverTimestamp(),
-            aiFeedback: feedback,
-            transcript,
-            missed
-          }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
+          if (!isQuotaExceededGlobal) {
+            addDoc(collection(db, 'history'), {
+              studentId,
+              part: state.currentPart + 1,
+              level,
+              score,
+              date: new Date().toLocaleDateString(),
+              timestamp: serverTimestamp(),
+              aiFeedback: feedback,
+              transcript,
+              missed
+            }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
+          }
         } catch (parseError) {
           console.error("JSON Parse error in AI feedback", parseError, response.text);
           throw parseError;
@@ -686,17 +743,19 @@ function AppContent() {
       );
 
       // Save to Firebase History
-      addDoc(collection(db, 'history'), {
-        studentId,
-        part: state.currentPart + 1,
-        level,
-        score,
-        date: new Date().toLocaleDateString(),
-        timestamp: serverTimestamp(),
-        transcript,
-        missed,
-        aiFeedback: fallbackFeedback
-      }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
+      if (!isQuotaExceededGlobal) {
+        addDoc(collection(db, 'history'), {
+          studentId,
+          part: state.currentPart + 1,
+          level,
+          score,
+          date: new Date().toLocaleDateString(),
+          timestamp: serverTimestamp(),
+          transcript,
+          missed,
+          aiFeedback: fallbackFeedback
+        }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
+      }
     }
   };
 
@@ -707,6 +766,7 @@ function AppContent() {
   const [feedback, setFeedback] = useState('');
   const [isInitializing, setIsInitializing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<Record<string, { date: string, score: number, level: number }[]>>(() => {
     const saved = localStorage.getItem('student_history');
@@ -717,6 +777,8 @@ function AppContent() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const transcriptRef = useRef<string>('');
+  const interimTranscriptRef = useRef<string>('');
+  const hadVolumeRef = useRef<boolean>(false);
   const isRecordingRef = useRef<boolean>(false);
   const isInitializingRef = useRef<boolean>(false);
   const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -725,6 +787,10 @@ function AppContent() {
 
   // --- Audio Visualizer ---
   const startVisualizer = async () => {
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      console.log("Visualizer already active, skipping re-init");
+      return;
+    }
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
@@ -747,6 +813,7 @@ function AppContent() {
         
         // Calculate average volume
         const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+        if (average > 10) hadVolumeRef.current = true;
         
         // Calculate 16 frequency bands for a more dynamic visualizer
         const bands = 16;
@@ -977,12 +1044,22 @@ function AppContent() {
       
       const duration = (Date.now() - recordingStartTimeRef.current) / 1000;
       
-      // Use transcriptRef to get the absolute latest text
-      const { score: finalScore, missed } = calculateScore(transcriptRef.current, state.student!.scripts[state.currentPart]);
+      // Use transcriptRef + interim to get the absolute latest text
+      const finalTranscript = (transcriptRef.current + ' ' + interimTranscriptRef.current).trim();
+      const { score: finalScore, missed } = calculateScore(finalTranscript, state.student!.scripts[state.currentPart]);
       
       setLastMissedWords(missed);
-      setLastTranscript(transcriptRef.current);
+      setLastTranscript(finalTranscript);
       setState(prev => ({ ...prev, isRecording: false, score: finalScore }));
+      
+      if (!finalTranscript) {
+        if (hadVolumeRef.current) {
+          setFeedback("I heard you speaking, but I couldn't catch the words. Please speak more clearly! 🎙️❓");
+        } else {
+          setFeedback("I didn't hear any sound. Please check your microphone! 🎙️❌");
+        }
+      }
+
       setShowResult(true);
 
       // Automatically update student progress if score is high (>= 90)
@@ -1030,7 +1107,7 @@ function AppContent() {
       
       // Call Gemini for AI feedback (which will then call sendToGAS)
       analyzeWithGemini(
-        transcriptRef.current, 
+        finalTranscript, 
         state.student!.scripts[state.currentPart], 
         state.student!.id,
         finalScore,
@@ -1114,6 +1191,8 @@ function AppContent() {
       setIsInitializing(true);
       setFeedback("");
       transcriptRef.current = '';
+      interimTranscriptRef.current = '';
+      hadVolumeRef.current = false;
 
       // Ensure everything is stopped before starting
       stopVisualizer();
@@ -1171,16 +1250,18 @@ function AppContent() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
+      let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const text = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           transcriptRef.current += ' ' + text;
-          setState(prev => ({ ...prev, transcript: transcriptRef.current }));
         } else {
-          interimTranscript += text;
+          interim += text;
         }
       }
+      interimTranscriptRef.current = interim;
+      const displayTranscript = (transcriptRef.current + ' ' + interim).trim();
+      setState(prev => ({ ...prev, transcript: displayTranscript }));
     };
 
     recognition.onstart = () => {
@@ -1250,9 +1331,15 @@ function AppContent() {
     };
   }, []);
 
-  const speak = (part: any) => {
+  const speak = async (part: any) => {
     if (isSpeaking) {
       window.speechSynthesis.cancel();
+      // Also stop any HTML5 audio if playing
+      const audios = document.querySelectorAll('audio');
+      audios.forEach(a => {
+        a.pause();
+        a.currentTime = 0;
+      });
       setIsSpeaking(false);
       return;
     }
@@ -1264,13 +1351,87 @@ function AppContent() {
                           .replace(/↑/g, '')
                           .replace(/\*\*/g, '');
 
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    // Only use Gemini TTS for iOS devices where system voice is poor
+    if (isIOS) {
+      try {
+        setIsLoadingAudio(true);
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-preview-tts",
+          contents: [{ parts: [{ text: `Read this naturally for a child: ${cleanText}` }] }],
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore is clear and friendly
+              },
+            },
+          },
+        });
+
+        const base64Audio = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+        
+        if (base64Audio) {
+          const binaryString = atob(base64Audio);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          // Try audio/mpeg as it's more common for TTS responses
+          const blob = new Blob([bytes], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio();
+          
+          audio.src = url;
+          
+          audio.onended = () => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(url);
+          };
+          audio.onerror = (e) => {
+            console.error("Audio playback error:", e);
+            setIsSpeaking(false);
+            URL.revokeObjectURL(url);
+            // Fallback to system TTS if audio playback fails
+            systemSpeak(cleanText, part);
+          };
+          
+          await audio.play();
+          setIsLoadingAudio(false);
+          setIsSpeaking(true);
+          return;
+        }
+      } catch (error) {
+        console.error("Gemini TTS failed, falling back to system voice:", error);
+      }
+    }
+
+    setIsLoadingAudio(false);
+    // Fallback to System TTS (Default for Desktop)
+    systemSpeak(cleanText, part);
+  };
+
+  const systemSpeak = (cleanText: string, part: any) => {
     const ut = new SpeechSynthesisUtterance(cleanText);
     const voices = window.speechSynthesis.getVoices();
-    const premiumVoice = voices.find(v => v.name.includes('Premium') || v.name.includes('Samantha') || v.name.includes('Alex'));
-    if (premiumVoice) ut.voice = premiumVoice;
+    
+    // Better voice selection for iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    let selectedVoice = null;
+    
+    if (isIOS) {
+      // iOS specific: Try to find "Samantha" or "Daniel" or "Karen" which are usually better
+      selectedVoice = voices.find(v => v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Karen'));
+    } else {
+      selectedVoice = voices.find(v => v.name.includes('Premium') || v.name.includes('Google US English') || v.name.includes('Samantha'));
+    }
+    
+    if (selectedVoice) ut.voice = selectedVoice;
     ut.lang = 'en-US';
     ut.pitch = part.pitch || 1.0;
-    ut.rate = part.rate || 0.9;
+    ut.rate = part.rate || 0.85; // Slightly slower for clarity
     
     ut.onstart = () => setIsSpeaking(true);
     ut.onend = () => setIsSpeaking(false);
@@ -1634,6 +1795,15 @@ function AppContent() {
     );
   }
 
+  if (state.view === 'admin') {
+    return (
+      <AdminPanel 
+        onBack={() => setState(prev => ({ ...prev, view: 'selection' }))}
+        onUpdate={updateStudentProgress}
+      />
+    );
+  }
+
   if (state.view === 'selection' || !state.student) {
     const selectedStudent = STUDENTS.find(s => s.id === selectedId);
 
@@ -1688,6 +1858,13 @@ function AppContent() {
               title="Teacher Dashboard"
             >
               <ShieldCheck className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={handleAdminLogin}
+              className="p-2 glass rounded-xl hover:bg-yellow-500/20 text-yellow-400 transition-colors"
+              title="Teacher Backend"
+            >
+              <Lock className="w-5 h-5" />
             </button>
           </div>
 
@@ -2478,11 +2655,62 @@ function AppContent() {
               )}
               <button 
                 onClick={() => speak(state.student!.scripts[state.currentPart])}
-                className={`p-2 glass rounded-xl transition-colors ${isSpeaking ? 'bg-red-500/20 text-red-400' : 'hover:bg-blue-500/20 text-blue-400'}`}
-                title={isSpeaking ? "Stop Listening" : "Listen to AI Demo"}
+                disabled={isLoadingAudio}
+                className={`p-2 glass rounded-xl transition-colors ${isSpeaking ? 'bg-red-500/20 text-red-400' : isLoadingAudio ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500/20 text-blue-400'}`}
+                title={isSpeaking ? "Stop Listening" : isLoadingAudio ? "Loading Voice..." : "Listen to AI Demo"}
               >
-                {isSpeaking ? <div className="w-6 h-6 flex items-center justify-center font-bold">■</div> : <Volume2 className="w-6 h-6" />}
+                {isSpeaking ? (
+                  <div className="w-6 h-6 flex items-center justify-center font-bold">■</div>
+                ) : (
+                  <Volume2 className="w-6 h-6" />
+                )}
               </button>
+
+              {/* Pizza Teacher Loading Overlay */}
+              <AnimatePresence>
+                {isLoadingAudio && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm"
+                  >
+                    <div className="relative flex flex-col items-center">
+                      {/* Speech Bubble */}
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="mb-6 relative bg-white px-6 py-4 rounded-3xl shadow-2xl border-2 border-orange-400"
+                      >
+                        <p className="text-orange-600 font-bold text-lg whitespace-nowrap">
+                          Have you memorized your speech? 🍕✨
+                        </p>
+                        <p className="text-slate-400 text-xs text-center mt-1">
+                          (Remember to memorize before playing!)
+                        </p>
+                        {/* Triangle pointer */}
+                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-orange-400" />
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[10px] border-t-white" />
+                      </motion.div>
+
+                      {/* Dancing Pizza */}
+                      <div className="text-8xl pizza-dance drop-shadow-2xl">
+                        🍕
+                      </div>
+                      
+                      <div className="mt-8 flex items-center gap-3">
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" />
+                        </div>
+                        <span className="text-white font-medium tracking-widest uppercase text-xs">AI Generating Voice...</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
@@ -2547,8 +2775,8 @@ function AppContent() {
                           <p className="text-blue-400 text-[10px] font-bold uppercase tracking-widest">AI Analysis Feedback:</p>
                         </div>
                         {state.isAnalyzingAI && (
-                          <div className="flex items-center gap-2 text-[10px] text-blue-400 animate-pulse">
-                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
+                          <div className="flex items-center gap-2 text-[10px] text-blue-400">
+                            <span className="pizza-dance text-sm">🍕</span>
                             Analyzing...
                           </div>
                         )}
@@ -2708,7 +2936,7 @@ function AppContent() {
           </p>
         </div>
       </div>
-    )}
+      )}
 
       {/* Result Modal */}
       <AnimatePresence>
@@ -2777,6 +3005,7 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
       {/* Footer Info */}
       <footer className="mt-8 flex justify-between items-center text-slate-500 text-[10px] uppercase tracking-[0.2em]">
@@ -2788,6 +3017,166 @@ function AppContent() {
       </footer>
       <MusicIndicator />
     </div>
-  </div>
-);
+  );
+}
+
+// --- Admin Panel Component ---
+interface AdminPanelProps {
+  onBack: () => void;
+  onUpdate: (id: string, updates: any) => Promise<void>;
+}
+
+function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+
+  const loadStudentData = async (id: string) => {
+    setLoading(true);
+    try {
+      const snap = await getDoc(doc(db, 'progress', id));
+      if (snap.exists()) {
+        setEditData(snap.data());
+      } else {
+        setEditData({
+          adventureProgress: 0,
+          drinkProgress: 0,
+          unlockedParts: 1,
+          unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+          completedLevels: []
+        });
+      }
+    } catch (err) {
+      alert("Failed to load data. Check network.");
+    }
+    setLoading(false);
+  };
+
+  const toggleLevel = (part: number, level: number) => {
+    const key = `${part}-${level}`;
+    const completed = editData.completedLevels || [];
+    const newCompleted = completed.includes(key) 
+      ? completed.filter((k: string) => k !== key)
+      : [...completed, key];
+    
+    setEditData({ ...editData, completedLevels: newCompleted });
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="min-h-screen bg-slate-900 p-6 text-white overflow-y-auto"
+    >
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <Lock className="text-yellow-500" /> Teacher Backend
+          </h1>
+          <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full">
+            <X className="w-8 h-8" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="glass p-6 rounded-3xl space-y-4">
+            <h2 className="text-xl font-bold text-blue-400">Select Student</h2>
+            <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto pr-2">
+              {STUDENTS.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    setSelectedStudentId(s.id);
+                    loadStudentData(s.id);
+                  }}
+                  className={`p-3 rounded-xl text-left transition-all ${selectedStudentId === s.id ? 'bg-blue-600 shadow-lg shadow-blue-600/30' : 'bg-white/5 hover:bg-white/10'}`}
+                >
+                  <p className="font-bold">{s.name}</p>
+                  <p className="text-[10px] opacity-50 uppercase">{s.topic}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="glass p-6 rounded-3xl space-y-6">
+            <h2 className="text-xl font-bold text-purple-400">Adjust Progress</h2>
+            {loading ? (
+              <div className="flex justify-center py-12"><Loader2 className="animate-spin w-12 h-12" /></div>
+            ) : editData ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Adventure %</label>
+                    <input 
+                      type="number" 
+                      value={editData.adventureProgress} 
+                      onChange={e => setEditData({...editData, adventureProgress: Number(e.target.value)})}
+                      className="w-full bg-white/5 border border-white/10 p-3 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Energy Drink %</label>
+                    <input 
+                      type="number" 
+                      value={editData.drinkProgress} 
+                      onChange={e => setEditData({...editData, drinkProgress: Number(e.target.value)})}
+                      className="w-full bg-white/5 border border-white/10 p-3 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Unlocked Parts (1-4)</label>
+                  <input 
+                    type="number" 
+                    min="1" max="4"
+                    value={editData.unlockedParts} 
+                    onChange={e => setEditData({...editData, unlockedParts: Number(e.target.value)})}
+                    className="w-full bg-white/5 border border-white/10 p-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 block mb-2">Completed Stars (Click to toggle)</label>
+                  <div className="space-y-3">
+                    {[0, 1, 2, 3].map(part => (
+                      <div key={part} className="flex items-center gap-2">
+                        <span className="text-[10px] w-12 opacity-50 uppercase">Part {part + 1}</span>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4].map(lvl => {
+                            const isDone = (editData.completedLevels || []).includes(`${part}-${lvl}`);
+                            return (
+                              <button
+                                key={lvl}
+                                onClick={() => toggleLevel(part, lvl)}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone ? 'bg-amber-500 text-white' : 'bg-white/5 text-slate-500'}`}
+                              >
+                                {lvl}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="pt-4">
+                  <button 
+                    onClick={() => onUpdate(selectedStudentId, editData)}
+                    className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-2xl font-bold shadow-lg shadow-green-600/30 transition-all"
+                  >
+                    Save Changes to Cloud
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-slate-500">Select a student to begin editing</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
