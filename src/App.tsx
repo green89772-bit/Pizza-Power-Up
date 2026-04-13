@@ -3160,34 +3160,42 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Adventure %</label>
-                    <input 
-                      type="number" 
-                      value={editData.adventureProgress} 
+                    <label className="text-xs text-slate-400 block mb-1">Adventure XP</label>
+                    <select 
+                      value={Math.round(editData.adventureProgress)} 
                       onChange={e => setEditData({...editData, adventureProgress: Number(e.target.value)})}
-                      className="w-full bg-white/5 border border-white/10 p-3 rounded-xl"
-                    />
+                      className="w-full bg-white/5 border border-white/10 p-3 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                    >
+                      {[0, 8, 17, 25, 33, 42, 50, 58, 67, 75, 83, 92, 100].map(v => (
+                        <option key={v} value={v} className="bg-slate-900">{v}%</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 block mb-1">Energy Drink %</label>
-                    <input 
-                      type="number" 
-                      value={editData.drinkProgress} 
+                    <select 
+                      value={Math.round(editData.drinkProgress)} 
                       onChange={e => setEditData({...editData, drinkProgress: Number(e.target.value)})}
-                      className="w-full bg-white/5 border border-white/10 p-3 rounded-xl"
-                    />
+                      className="w-full bg-white/5 border border-white/10 p-3 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                    >
+                      {[0, 25, 50, 75, 100].map(v => (
+                        <option key={v} value={v} className="bg-slate-900">{v}%</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">Unlocked Parts (1-4)</label>
-                  <input 
-                    type="number" 
-                    min="1" max="4"
+                  <label className="text-xs text-slate-400 block mb-1">Unlocked Parts</label>
+                  <select 
                     value={editData.unlockedParts} 
                     onChange={e => setEditData({...editData, unlockedParts: Number(e.target.value)})}
-                    className="w-full bg-white/5 border border-white/10 p-3 rounded-xl"
-                  />
+                    className="w-full bg-white/5 border border-white/10 p-3 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
+                    {[1, 2, 3, 4].map(v => (
+                      <option key={v} value={v} className="bg-slate-900">Part {v}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
