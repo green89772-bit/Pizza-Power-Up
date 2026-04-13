@@ -2148,8 +2148,9 @@ function AppContent() {
           <div className="absolute top-1/2 left-0 w-full h-2 bg-blue-600/20 -translate-y-1/2 hidden lg:block z-0" />
           
           {[0, 1, 2, 3].map((partIdx) => {
-            const isUnlocked = partIdx + 1 <= state.unlockedParts;
-            const maxLevel = state.unlockedLevels[partIdx] || 1;
+            // Force all parts to be unlocked for everyone
+            const isUnlocked = true;
+            const maxLevel = partIdx === 0 ? 4 : Math.max(1, state.unlockedLevels[partIdx] || 1);
             
             return (
               <motion.div 
@@ -2157,20 +2158,8 @@ function AppContent() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: partIdx * 0.1 }}
-                className={`relative flex flex-col rounded-[2.5rem] p-8 border-4 transition-all z-10 ${
-                  isUnlocked 
-                    ? 'border-blue-500/50 bg-slate-900/80 shadow-[0_0_30px_rgba(59,130,246,0.1)]' 
-                    : 'border-slate-800 bg-slate-900/50 opacity-50 grayscale'
-                }`}
+                className="relative flex flex-col rounded-[2.5rem] p-8 border-4 transition-all z-10 border-blue-500/50 bg-slate-900/80 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
               >
-                {!isUnlocked && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/40 rounded-[2.5rem] backdrop-blur-[2px]">
-                    <div className="bg-slate-900 p-4 rounded-full border border-white/10 shadow-2xl">
-                      <Lock className="w-8 h-8 text-slate-500" />
-                    </div>
-                  </div>
-                )}
-
                 <div className="mb-6 flex justify-between items-start">
                   <div>
                     <h3 className="font-bungee text-2xl text-blue-400">PART {partIdx + 1}</h3>
@@ -3062,6 +3051,56 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
     setEditData({ ...editData, completedLevels: newCompleted });
   };
 
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkSuccess, setBulkSuccess] = useState(false);
+
+  const handleBulkUnlock = async () => {
+    setBulkLoading(true);
+    setBulkSuccess(false);
+    try {
+      const batch = STUDENTS.map(async (s) => {
+        const docRef = doc(db, 'progress', s.id);
+        const snap = await getDoc(docRef);
+        const currentData = snap.exists() ? snap.data() : {
+          adventureProgress: 0,
+          drinkProgress: 0,
+          unlockedParts: 1,
+          unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+          completedLevels: []
+        };
+        
+        const newCompletedLevels = Array.from(new Set([
+          ...(currentData.completedLevels || []),
+          '0-1', '0-2', '0-3'
+        ]));
+        
+        const adventureTasks = newCompletedLevels.filter(cl => !cl.endsWith('-4')).length;
+        const newAdventureProgress = (Math.min(adventureTasks, 12) / 12) * 100;
+
+        const updates = {
+          ...currentData,
+          completedLevels: newCompletedLevels,
+          adventureProgress: newAdventureProgress,
+          unlockedParts: 4, // Unlock all parts (1-4)
+          unlockedLevels: {
+            ...(currentData.unlockedLevels || {}),
+            0: 4, // Part 1: All levels
+            1: 1, // Part 2: Level 1
+            2: 1, // Part 3: Level 1
+            3: 1  // Part 4: Level 1
+          }
+        };
+        return setDoc(docRef, updates);
+      });
+      await Promise.all(batch);
+      setBulkSuccess(true);
+      setTimeout(() => setBulkSuccess(false), 3000);
+    } catch (err) {
+      console.error(err);
+    }
+    setBulkLoading(false);
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -3081,7 +3120,21 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="glass p-6 rounded-3xl space-y-4">
-            <h2 className="text-xl font-bold text-blue-400">Select Student</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-blue-400">Select Student</h2>
+              <button 
+                onClick={handleBulkUnlock}
+                disabled={bulkLoading}
+                className={`text-[10px] px-3 py-1 rounded-full border transition-all flex items-center gap-1 ${
+                  bulkSuccess 
+                    ? 'bg-green-600/20 text-green-400 border-green-500/30' 
+                    : 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border-blue-500/30'
+                }`}
+              >
+                {bulkLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : (bulkSuccess ? <CheckCircle2 className="w-3 h-3" /> : null)}
+                {bulkLoading ? 'Updating...' : (bulkSuccess ? 'Done!' : 'Bulk Unlock All Parts (Lv 1)')}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto pr-2">
               {STUDENTS.map(s => (
                 <button
