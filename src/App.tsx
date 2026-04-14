@@ -211,19 +211,56 @@ function AppContent() {
     return defaultState;
   });
 
-  // --- Firebase Sync Logic ---
+  // --- Firebase Global Sync Logic ---
+  useEffect(() => {
+    // Listen to the entire progress collection to keep mockProgress in sync for ALL students
+    const q = collection(db, 'progress');
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const updates: any = {};
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        updates[doc.id] = {
+          adventure: `${Math.floor(data.adventureProgress || 0)}%`,
+          drink: `${Math.floor(data.drinkProgress || 0)}%`,
+          unlockedParts: data.unlockedParts || 1,
+          unlockedLevels: data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 },
+          completedLevels: data.completedLevels || [],
+          pendingLevels: data.pendingLevels || [],
+          lastUpdated: data.lastUpdated
+        };
+      });
+
+      setMockProgress(prev => {
+        const newState = { ...prev };
+        Object.keys(updates).forEach(id => {
+          newState[id] = {
+            ...(prev[id] || { 
+              level: 1, score: 0, adventure: "0%", drink: "0%", task: "Ready", part: 0,
+              unlockedParts: 1, unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+              completedLevels: [], pendingLevels: []
+            }),
+            ...updates[id]
+          };
+        });
+        return newState;
+      });
+    }, (error) => {
+      console.error("Global sync error:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // --- Individual Student Sync Logic ---
   useEffect(() => {
     if (!state.student) return;
-
     const studentId = state.student.id;
     const progressRef = doc(db, 'progress', studentId);
 
-    // Listen for remote changes
     const unsubscribe = onSnapshot(progressRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         setState(prev => {
-          // Only update if remote is different and we are not in a critical state
           if (prev.student?.id === studentId) {
             return {
               ...prev,
@@ -287,6 +324,7 @@ function AppContent() {
 
 
   const [showRules, setShowRules] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
 
@@ -1910,31 +1948,95 @@ function AppContent() {
                   <div>
                     <h2 className="font-bungee text-2xl text-blue-400">{selectedStudent.title}</h2>
                     <p className="text-sm text-slate-400 uppercase tracking-widest">{selectedStudent.topic}</p>
+                    
+                    {/* Real-time Progress Bar on Selection Screen */}
+                    <div className="mt-4 space-y-1">
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adventure XP</span>
+                        <span className="text-xs font-black text-blue-400">{mockProgress[selectedStudent.id].adventure}</span>
+                      </div>
+                      <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                        <motion.div 
+                          className="h-full bg-gradient-to-r from-blue-600 to-purple-500"
+                          initial={{ width: 0 }}
+                          animate={{ width: mockProgress[selectedStudent.id].adventure }}
+                          transition={{ type: "spring", stiffness: 50 }}
+                        />
+                      </div>
+                    <p className="text-[9px] text-slate-600 flex items-center justify-center gap-1 pt-1">
+                      <motion.div
+                        animate={{ opacity: [1, 0.5, 1] }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-blue-500" />
+                      </motion.div>
+                      Real-time Cloud Sync Active
+                    </p>
+                    </div>
                   </div>
                   <div className="flex gap-2 w-full">
                     <button 
-                      onClick={() => {
-                        const progress = mockProgress[selectedStudent.id];
-                        const adventureVal = parseFloat(progress.adventure);
-                        const drinkVal = parseFloat(progress.drink);
-                        setState(prev => ({ 
-                          ...prev, 
-                          student: selectedStudent, 
-                          view: 'map',
-                          level: progress.level as Level,
-                          currentPart: progress.part,
-                          adventureProgress: isNaN(adventureVal) ? 0 : adventureVal,
-                          drinkProgress: isNaN(drinkVal) ? 0 : drinkVal,
-                          unlockedParts: progress.unlockedParts,
-                          unlockedLevels: progress.unlockedLevels,
-                          completedLevels: progress.completedLevels,
-                          pendingLevels: progress.pendingLevels || []
-                        }));
-                        setShowRules(true);
+                      onClick={async () => {
+                        setLoading(true);
+                        try {
+                          // Try to get latest from cloud first
+                          const snap = await getDoc(doc(db, 'progress', selectedStudent.id));
+                          let progress = mockProgress[selectedStudent.id];
+                          
+                          if (snap.exists()) {
+                            const data = snap.data();
+                            progress = {
+                              ...progress,
+                              adventure: `${Math.floor(data.adventureProgress || 0)}%`,
+                              drink: `${Math.floor(data.drinkProgress || 0)}%`,
+                              unlockedParts: data.unlockedParts || 1,
+                              unlockedLevels: data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 },
+                              completedLevels: data.completedLevels || [],
+                              pendingLevels: data.pendingLevels || []
+                            };
+                          }
+
+                          const adventureVal = parseFloat(progress.adventure);
+                          const drinkVal = parseFloat(progress.drink);
+                          
+                          setState(prev => ({ 
+                            ...prev, 
+                            student: selectedStudent, 
+                            view: 'map',
+                            level: (progress as any).level || 1,
+                            currentPart: (progress as any).part || 0,
+                            adventureProgress: isNaN(adventureVal) ? 0 : adventureVal,
+                            drinkProgress: isNaN(drinkVal) ? 0 : drinkVal,
+                            unlockedParts: progress.unlockedParts,
+                            unlockedLevels: progress.unlockedLevels,
+                            completedLevels: progress.completedLevels,
+                            pendingLevels: progress.pendingLevels || []
+                          }));
+                          setShowRules(true);
+                        } catch (err) {
+                          console.error("Selection sync failed", err);
+                          // Fallback to local
+                          const progress = mockProgress[selectedStudent.id];
+                          const adventureVal = parseFloat(progress.adventure);
+                          const drinkVal = parseFloat(progress.drink);
+                          setState(prev => ({ 
+                            ...prev, 
+                            student: selectedStudent, 
+                            view: 'map',
+                            adventureProgress: isNaN(adventureVal) ? 0 : adventureVal,
+                            drinkProgress: isNaN(drinkVal) ? 0 : drinkVal,
+                            unlockedParts: progress.unlockedParts,
+                            unlockedLevels: progress.unlockedLevels,
+                            completedLevels: progress.completedLevels,
+                            pendingLevels: progress.pendingLevels || []
+                          }));
+                          setShowRules(true);
+                        }
+                        setLoading(false);
                       }}
-                      className="flex-1 py-4 bg-blue-600 rounded-2xl font-bold text-xl hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-500/30"
+                      className="flex-1 py-4 bg-blue-600 rounded-2xl font-bold text-xl hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-500/30 flex items-center justify-center"
                     >
-                      SUMMON HERO
+                      {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'SUMMON HERO'}
                     </button>
                     <button 
                       onClick={() => {
@@ -3020,12 +3122,18 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
   const [loading, setLoading] = useState(false);
   const [editData, setEditData] = useState<any>(null);
 
-  const loadStudentData = async (id: string) => {
+  useEffect(() => {
+    if (!selectedStudentId) {
+      setEditData(null);
+      return;
+    }
+
     setLoading(true);
-    try {
-      const snap = await getDoc(doc(db, 'progress', id));
-      if (snap.exists()) {
-        setEditData(snap.data());
+    const progressRef = doc(db, 'progress', selectedStudentId);
+    
+    const unsubscribe = onSnapshot(progressRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setEditData(snapshot.data());
       } else {
         setEditData({
           adventureProgress: 0,
@@ -3035,11 +3143,14 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
           completedLevels: []
         });
       }
-    } catch (err) {
-      alert("Failed to load data. Check network.");
-    }
-    setLoading(false);
-  };
+      setLoading(false);
+    }, (err) => {
+      console.error("Admin sync error:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [selectedStudentId]);
 
   const toggleLevel = (part: number, level: number) => {
     const key = `${part}-${level}`;
@@ -3141,7 +3252,6 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
                   key={s.id}
                   onClick={() => {
                     setSelectedStudentId(s.id);
-                    loadStudentData(s.id);
                   }}
                   className={`p-3 rounded-xl text-left transition-all ${selectedStudentId === s.id ? 'bg-blue-600 shadow-lg shadow-blue-600/30' : 'bg-white/5 hover:bg-white/10'}`}
                 >
