@@ -198,7 +198,7 @@ function AppContent() {
       frequencyData: Array(8).fill(0),
       adventureProgress: 0,
       drinkProgress: 0,
-      unlockedParts: 1,
+      unlockedParts: 4,
       unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
       completedLevels: [],
       pendingLevels: [],
@@ -222,8 +222,13 @@ function AppContent() {
         updates[doc.id] = {
           adventure: `${Math.floor(data.adventureProgress || 0)}%`,
           drink: `${Math.floor(data.drinkProgress || 0)}%`,
-          unlockedParts: data.unlockedParts || 1,
-          unlockedLevels: data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 },
+          unlockedParts: Math.max(4, data.unlockedParts || 1),
+          unlockedLevels: (() => {
+            const levels = data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 };
+            const normalized: Record<number, number> = {};
+            Object.keys(levels).forEach(k => normalized[Number(k)] = levels[k]);
+            return normalized;
+          })(),
           completedLevels: data.completedLevels || [],
           pendingLevels: data.pendingLevels || [],
           lastUpdated: data.lastUpdated
@@ -236,7 +241,7 @@ function AppContent() {
           newState[id] = {
             ...(prev[id] || { 
               level: 1, score: 0, adventure: "0%", drink: "0%", task: "Ready", part: 0,
-              unlockedParts: 1, unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+              unlockedParts: 4, unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
               completedLevels: [], pendingLevels: []
             }),
             ...updates[id]
@@ -266,8 +271,13 @@ function AppContent() {
               ...prev,
               adventureProgress: data.adventureProgress ?? prev.adventureProgress,
               drinkProgress: data.drinkProgress ?? prev.drinkProgress,
-              unlockedParts: data.unlockedParts ?? prev.unlockedParts,
-              unlockedLevels: data.unlockedLevels ?? prev.unlockedLevels,
+              unlockedParts: Math.max(4, data.unlockedParts ?? prev.unlockedParts),
+              unlockedLevels: (() => {
+                const levels = data.unlockedLevels ?? prev.unlockedLevels;
+                const normalized: Record<number, number> = {};
+                Object.keys(levels).forEach(k => normalized[Number(k)] = levels[k]);
+                return normalized;
+              })(),
               completedLevels: data.completedLevels ?? prev.completedLevels,
               pendingLevels: data.pendingLevels ?? prev.pendingLevels,
               teacherFeedback: {
@@ -407,7 +417,7 @@ function AppContent() {
             setAudioUnlocked(true);
           })
           .catch(err => {
-            if (err.name !== 'AbortError') {
+            if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
               console.warn("Audio play failed in effect, trying fallback:", err);
               if (audio.src !== fallbackUrl) {
                 audio.src = fallbackUrl;
@@ -418,6 +428,8 @@ function AppContent() {
                     if (fallbackErr.name !== 'AbortError') console.error("Both failed in effect:", fallbackErr);
                   });
               }
+            } else {
+              console.log("Audio play postponed until user interaction or interrupted.");
             }
           });
       }
@@ -434,7 +446,9 @@ function AppContent() {
         audio.play()
           .then(() => setAudioUnlocked(true))
           .catch(err => {
-            if (err.name !== 'AbortError') console.warn("Interaction play failed:", err);
+            if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+              console.warn("Interaction play failed:", err);
+            }
           });
       }
     };
@@ -531,15 +545,17 @@ function AppContent() {
           setAudioUnlocked(true);
         })
         .catch(err => {
-          console.warn("Primary audio failed, trying fallback:", err);
-          tryPlay(fallbackUrl)
-            .then(() => {
-              console.log("Fallback audio unlocked successfully!");
-              setAudioUnlocked(true);
-            })
-            .catch(fallbackErr => {
-              console.error("Both primary and fallback audio failed:", fallbackErr);
-            });
+          if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+            console.warn("Primary audio failed, trying fallback:", err);
+            tryPlay(fallbackUrl)
+              .then(() => {
+                console.log("Fallback audio unlocked successfully!");
+                setAudioUnlocked(true);
+              })
+              .catch(fallbackErr => {
+                if (fallbackErr.name !== 'AbortError') console.error("Both primary and fallback audio failed:", fallbackErr);
+              });
+          }
         });
     }
 
@@ -573,7 +589,7 @@ function AppContent() {
           setAudioUnlocked(true);
         })
         .catch(err => {
-          if (err.name !== 'AbortError') {
+          if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') { // Catch play interruption and lack of interaction
             console.warn("Global click: Primary audio failed, trying fallback:", err);
             tryPlay(fallbackUrl)
               .then(() => {
@@ -581,7 +597,7 @@ function AppContent() {
                 setAudioUnlocked(true);
               })
               .catch(fallbackErr => {
-                if (fallbackErr.name !== 'AbortError') {
+                if (fallbackErr.name !== 'AbortError' && fallbackErr.name !== 'NotAllowedError') {
                   console.error("Global click: Both primary and fallback audio failed:", fallbackErr);
                 }
               });
@@ -648,7 +664,7 @@ function AppContent() {
         drink: '0%',
         task: 'Pending', 
         part: 0,
-        unlockedParts: 1,
+        unlockedParts: 4,
         unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
         completedLevels: [],
         pendingLevels: []
@@ -896,7 +912,7 @@ function AppContent() {
     
     if (level === 3 && !showResult) return "??? (Speak the whole script from memory!)";
 
-    const words = text.split(' ');
+    const words = text.split(/\s+/).filter(Boolean);
     let wordCount = 0;
 
     return (
@@ -916,7 +932,7 @@ function AppContent() {
                 {level === 1 && wordCount % 3 === 2 && !showResult 
                   ? '_____' 
                   : (level === 2 && !showResult 
-                      ? (cleanWord.length > 0 ? cleanWord[0] + '.'.repeat(Math.max(0, cleanWord.length - 1)) : '') 
+                      ? (cleanWord.length > 0 ? (cleanWord[0] || '') + '.'.repeat(Math.max(0, cleanWord.length - 1)) : '') 
                       : cleanWord)}
                 {hasAttachedTriangle && <span className="text-red-500 font-bold">▲</span>}
                 <span className="text-blue-400 font-bold text-xs">↑</span>
@@ -931,7 +947,7 @@ function AppContent() {
           let displayWord = (level === 1 && wordCount % 3 === 0 && !showResult)
             ? '_____' 
             : (level === 2 && !showResult 
-                ? (w.length > 0 ? w[0] + '.'.repeat(Math.max(0, w.length - 1)) : '') 
+                ? (w.length > 0 ? (w[0] || '') + '.'.repeat(Math.max(0, w.length - 1)) : w) 
                 : w);
             
           const isBold = displayWord.includes('**');
@@ -1176,14 +1192,14 @@ function AppContent() {
           const newDrink = calculateDrinkProgress(newCompleted);
           
           // Unlock Logic
-          const nextLevel = state.level < 3 ? state.level + 1 : state.level;
-          const currentMaxLevel = state.unlockedLevels[state.currentPart] || 1;
+          const nextLevel = state.level < 4 ? state.level + 1 : state.level;
+          const currentMaxLevel = (state.unlockedLevels[state.currentPart] || (state.unlockedLevels as any)[String(state.currentPart)] || 1);
           
           const nextUnlockedLevels = {
             ...state.unlockedLevels,
             [state.currentPart]: Math.max(currentMaxLevel, nextLevel as number)
           };
-          const nextUnlockedParts = (state.level === 3 && state.currentPart < 3) 
+          const nextUnlockedParts = (state.level >= 3 && state.currentPart < 3) 
             ? Math.max(state.unlockedParts, state.currentPart + 2) 
             : state.unlockedParts;
 
@@ -1442,7 +1458,11 @@ function AppContent() {
             systemSpeak(cleanText, part);
           };
           
-          await audio.play();
+          try {
+            await audio.play();
+          } catch (playErr) {
+            console.warn("TTS Audio play was interrupted or restricted:", playErr);
+          }
           setIsLoadingAudio(false);
           setIsSpeaking(true);
           return;
@@ -1550,14 +1570,14 @@ function AppContent() {
     const newAdventure = calculateAdventureProgress(newCompleted);
     const newDrink = calculateDrinkProgress(newCompleted);
     
-    const nextLevel = state.level < 3 ? state.level + 1 : state.level;
-    const currentMaxLevel = state.unlockedLevels[state.currentPart] || 1;
+    const nextLevel = state.level < 4 ? state.level + 1 : state.level;
+    const currentMaxLevel = (state.unlockedLevels[state.currentPart] || (state.unlockedLevels as any)[String(state.currentPart)] || 1);
 
     const nextUnlockedLevels = {
       ...state.unlockedLevels,
       [state.currentPart]: Math.max(currentMaxLevel, nextLevel as number)
     };
-    const nextUnlockedParts = (state.level === 3 && state.currentPart < 3) 
+    const nextUnlockedParts = (state.level >= 3 && state.currentPart < 3) 
       ? Math.max(state.unlockedParts, state.currentPart + 2) 
       : state.unlockedParts;
 
@@ -1969,7 +1989,7 @@ function AppContent() {
                           transition={{ type: "spring", stiffness: 50 }}
                         />
                       </div>
-                    <p className="text-[9px] text-slate-600 flex items-center justify-center gap-1 pt-1">
+                    <div className="text-[9px] text-slate-600 flex items-center justify-center gap-1 pt-1">
                       <motion.div
                         animate={{ opacity: [1, 0.5, 1] }}
                         transition={{ repeat: Infinity, duration: 2 }}
@@ -1977,7 +1997,7 @@ function AppContent() {
                         <Sparkles className="w-2.5 h-2.5 text-blue-500" />
                       </motion.div>
                       Real-time Cloud Sync Active
-                    </p>
+                    </div>
                     </div>
                   </div>
                   <div className="flex gap-2 w-full">
@@ -1995,7 +2015,7 @@ function AppContent() {
                               ...progress,
                               adventure: `${Math.floor(data.adventureProgress || 0)}%`,
                               drink: `${Math.floor(data.drinkProgress || 0)}%`,
-                              unlockedParts: data.unlockedParts || 1,
+                              unlockedParts: Math.max(4, data.unlockedParts || 1),
                               unlockedLevels: data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 },
                               completedLevels: data.completedLevels || [],
                               pendingLevels: data.pendingLevels || []
@@ -2258,7 +2278,8 @@ function AppContent() {
           {[0, 1, 2, 3].map((partIdx) => {
             // Respect database state for unlocking
             const isUnlocked = partIdx + 1 <= state.unlockedParts;
-            const maxLevel = partIdx === 0 ? 4 : Math.max(1, state.unlockedLevels[partIdx] || 1);
+            const rawUnlockedLevel = state.unlockedLevels[partIdx] || (state.unlockedLevels as any)[String(partIdx)] || 1;
+            const maxLevel = partIdx === 0 ? 4 : Math.max(1, rawUnlockedLevel);
             
             return (
               <motion.div 
@@ -3148,7 +3169,7 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
         setEditData({
           adventureProgress: 0,
           drinkProgress: 0,
-          unlockedParts: 1,
+          unlockedParts: 4,
           unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
           completedLevels: []
         });
@@ -3185,7 +3206,7 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
         const currentData = snap.exists() ? snap.data() : {
           adventureProgress: 0,
           drinkProgress: 0,
-          unlockedParts: 1,
+          unlockedParts: 4,
           unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
           completedLevels: []
         };
@@ -3232,7 +3253,7 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
           studentId: s.id,
           adventureProgress: 0,
           drinkProgress: 0,
-          unlockedParts: 1,
+          unlockedParts: 4,
           unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
           completedLevels: [],
           pendingLevels: [],
@@ -3386,7 +3407,7 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
                         onUpdate(selectedStudentId, {
                           adventureProgress: 0,
                           drinkProgress: 0,
-                          unlockedParts: 1,
+                          unlockedParts: 4,
                           unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
                           completedLevels: [],
                           pendingLevels: []
