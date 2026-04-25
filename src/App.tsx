@@ -905,7 +905,7 @@ function AppContent() {
           if (w.includes('▲') && w.length === 1) {
             return <span key={i} className="text-red-500 font-bold mx-1">▲</span>;
           }
-          if (w.includes('(↑)')) {
+            if (w.includes('(↑)')) {
             const cleanWord = w.replace('(↑)', '').replace(/\*\*/g, '').replace(/▲/g, '');
             const isMissed = highlightMissed.some(m => cleanWord.toLowerCase().includes(m.toLowerCase()));
             const isBold = w.includes('**');
@@ -913,7 +913,11 @@ function AppContent() {
             
             return (
               <span key={i} className={`flex items-center gap-0.5 ${isMissed ? 'text-red-400 font-bold underline decoration-red-500/50' : ''} ${isBold ? 'font-bold' : ''}`}>
-                {level === 1 && wordCount % 3 === 2 && !showResult ? '_____' : (level === 2 && !showResult ? cleanWord[0] + '.'.repeat(cleanWord.length - 1) : cleanWord)}
+                {level === 1 && wordCount % 3 === 2 && !showResult 
+                  ? '_____' 
+                  : (level === 2 && !showResult 
+                      ? (cleanWord.length > 0 ? cleanWord[0] + '.'.repeat(Math.max(0, cleanWord.length - 1)) : '') 
+                      : cleanWord)}
                 {hasAttachedTriangle && <span className="text-red-500 font-bold">▲</span>}
                 <span className="text-blue-400 font-bold text-xs">↑</span>
               </span>
@@ -924,9 +928,11 @@ function AppContent() {
           const cleanW = w.replace(/[.,/#!$%^&*;:{}=\-_`~()▲↑]/g, "").replace(/\*\*/g, "");
           const isMissed = highlightMissed.some(m => cleanW.toLowerCase() === m.toLowerCase());
           
-          let displayWord = level === 1 && wordCount % 3 === 0 && !showResult
+          let displayWord = (level === 1 && wordCount % 3 === 0 && !showResult)
             ? '_____' 
-            : (level === 2 && !showResult ? w[0] + '.'.repeat(w.length - 1) : w);
+            : (level === 2 && !showResult 
+                ? (w.length > 0 ? w[0] + '.'.repeat(Math.max(0, w.length - 1)) : '') 
+                : w);
             
           const isBold = displayWord.includes('**');
           if (isBold) {
@@ -2250,8 +2256,8 @@ function AppContent() {
           <div className="absolute top-1/2 left-0 w-full h-2 bg-blue-600/20 -translate-y-1/2 hidden lg:block z-0" />
           
           {[0, 1, 2, 3].map((partIdx) => {
-            // Force all parts to be unlocked for everyone
-            const isUnlocked = true;
+            // Respect database state for unlocking
+            const isUnlocked = partIdx + 1 <= state.unlockedParts;
             const maxLevel = partIdx === 0 ? 4 : Math.max(1, state.unlockedLevels[partIdx] || 1);
             
             return (
@@ -2260,7 +2266,11 @@ function AppContent() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: partIdx * 0.1 }}
-                className="relative flex flex-col rounded-[2.5rem] p-8 border-4 transition-all z-10 border-blue-500/50 bg-slate-900/80 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
+                className={`relative flex flex-col rounded-[2.5rem] p-8 border-4 transition-all z-10 ${
+                  isUnlocked 
+                    ? 'border-blue-500/50 bg-slate-900/80 shadow-[0_0_30px_rgba(59,130,246,0.1)]' 
+                    : 'border-white/5 bg-slate-900/40 grayscale opacity-50'
+                }`}
               >
                 <div className="mb-6 flex justify-between items-start">
                   <div>
@@ -3212,6 +3222,32 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
     setBulkLoading(false);
   };
 
+  const handleBulkReset = async () => {
+    if (!confirm("Are you sure you want to RESET ALL students to original state? This cannot be undone.")) return;
+    setBulkLoading(true);
+    try {
+      const batch = STUDENTS.map(s => {
+        const docRef = doc(db, 'progress', s.id);
+        return setDoc(docRef, {
+          studentId: s.id,
+          adventureProgress: 0,
+          drinkProgress: 0,
+          unlockedParts: 1,
+          unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+          completedLevels: [],
+          pendingLevels: [],
+          lastUpdated: serverTimestamp()
+        });
+      });
+      await Promise.all(batch);
+      setBulkSuccess(true);
+      setTimeout(() => setBulkSuccess(false), 3000);
+    } catch (err) {
+      console.error(err);
+    }
+    setBulkLoading(false);
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -3220,14 +3256,24 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
       className="min-h-screen bg-slate-900 p-6 text-white overflow-y-auto"
     >
       <div className="max-w-4xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Lock className="text-yellow-500" /> Teacher Backend
-          </h1>
-          <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full">
-            <X className="w-8 h-8" />
-          </button>
-        </div>
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <Lock className="text-yellow-500" /> Teacher Backend
+            </h1>
+            <div className="flex gap-2">
+              <button 
+                onClick={handleBulkReset}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+              >
+                {bulkLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                Reset All
+              </button>
+              <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full">
+                <X className="w-8 h-8" />
+              </button>
+            </div>
+          </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="glass p-6 rounded-3xl space-y-4">
@@ -3333,10 +3379,27 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
                   </div>
                 </div>
                 
-                <div className="pt-4">
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => {
+                      if (confirm("Reset this student's progress?")) {
+                        onUpdate(selectedStudentId, {
+                          adventureProgress: 0,
+                          drinkProgress: 0,
+                          unlockedParts: 1,
+                          unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
+                          completedLevels: [],
+                          pendingLevels: []
+                        });
+                      }
+                    }}
+                    className="flex-1 py-4 bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-2xl font-bold transition-all border border-white/10"
+                  >
+                    Reset Student
+                  </button>
                   <button 
                     onClick={() => onUpdate(selectedStudentId, editData)}
-                    className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-2xl font-bold shadow-lg shadow-green-600/30 transition-all"
+                    className="flex-[2] py-4 bg-green-600 hover:bg-green-500 rounded-2xl font-bold shadow-lg shadow-green-600/30 transition-all"
                   >
                     Save Changes to Cloud
                   </button>
