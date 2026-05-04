@@ -1016,12 +1016,19 @@ function AppContent() {
       // Try exact match first
       let idx = sWords.findIndex((sw, i) => sw === tw && !usedIndices.has(i));
       
-      // If no exact match, try fuzzy match for longer words
-      if (idx === -1 && tw.length > 3) {
+      // If no exact match, try fuzzy match for words >= 3 chars
+      if (idx === -1 && tw.length >= 3) {
         idx = sWords.findIndex((sw, i) => {
           if (usedIndices.has(i)) return false;
+          
+          // 1. Prefix/Stem matching (handles "throw" vs "throwing" etc)
+          const isPrefix = sw.startsWith(tw) || tw.startsWith(sw);
+          if (isPrefix && Math.abs(sw.length - tw.length) <= 3) return true;
+
+          // 2. Levenshtein distance with more tolerance (35% of length)
           const dist = getLevenshteinDistance(sw, tw);
-          return dist <= 1; // Allow 1 character difference
+          const threshold = Math.max(1, Math.floor(tw.length * 0.35)); 
+          return dist <= threshold;
         });
       }
 
@@ -1036,11 +1043,11 @@ function AppContent() {
     const rawScore = (matches / targetWords.length) * 100;
     
     let finalScore = Math.round(rawScore);
-    if (rawScore < 30) finalScore = Math.round(rawScore * 1.5 + 10);
-    else if (rawScore < 50) finalScore = Math.floor(((rawScore - 30) / 20) * 15) + 65;
-    else if (rawScore < 70) finalScore = Math.floor(((rawScore - 50) / 20) * 10) + 80;
-    else if (rawScore < 85) finalScore = Math.floor(((rawScore - 70) / 15) * 5) + 90;
-    else if (rawScore >= 85) finalScore = Math.min(100, Math.floor(((rawScore - 85) / 15) * 5) + 95);
+    if (rawScore < 20) finalScore = Math.round(rawScore * 1.5 + 15);
+    else if (rawScore < 40) finalScore = Math.floor(((rawScore - 20) / 20) * 20) + 45;
+    else if (rawScore < 60) finalScore = Math.floor(((rawScore - 40) / 20) * 15) + 75;
+    else if (rawScore < 80) finalScore = Math.floor(((rawScore - 60) / 20) * 7) + 90;
+    else if (rawScore >= 80) finalScore = Math.min(100, Math.floor(((rawScore - 80) / 20) * 3) + 97);
     
     return { score: finalScore, missed: Array.from(new Set(missed)).slice(0, 10) }; // Show up to 10 missed words
   };
