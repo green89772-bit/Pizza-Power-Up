@@ -170,6 +170,18 @@ interface GameState {
   isAnalyzingAI: boolean;
 }
 
+// --- Helper Functions ---
+const normalizeLevels = (levels: any): Record<number, number> => {
+  const defaultLevels = { 0: 1, 1: 1, 2: 1, 3: 1 };
+  if (!levels) return defaultLevels;
+  const normalized: Record<number, number> = { ...defaultLevels };
+  Object.keys(levels).forEach(k => {
+    const val = levels[k];
+    normalized[Number(k)] = typeof val === 'number' ? Math.max(1, val) : 1;
+  });
+  return normalized;
+};
+
 // --- Speech Recognition Setup ---
 const getSpeechRecognition = () => {
   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -223,12 +235,7 @@ function AppContent() {
           adventure: `${Math.floor(data.adventureProgress || 0)}%`,
           drink: `${Math.floor(data.drinkProgress || 0)}%`,
           unlockedParts: Math.max(4, data.unlockedParts || 1),
-          unlockedLevels: (() => {
-            const levels = data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 };
-            const normalized: Record<number, number> = {};
-            Object.keys(levels).forEach(k => normalized[Number(k)] = levels[k]);
-            return normalized;
-          })(),
+          unlockedLevels: normalizeLevels(data.unlockedLevels),
           completedLevels: data.completedLevels || [],
           pendingLevels: data.pendingLevels || [],
           lastUpdated: data.lastUpdated
@@ -272,12 +279,7 @@ function AppContent() {
               adventureProgress: data.adventureProgress ?? prev.adventureProgress,
               drinkProgress: data.drinkProgress ?? prev.drinkProgress,
               unlockedParts: Math.max(4, data.unlockedParts ?? prev.unlockedParts),
-              unlockedLevels: (() => {
-                const levels = data.unlockedLevels ?? prev.unlockedLevels;
-                const normalized: Record<number, number> = {};
-                Object.keys(levels).forEach(k => normalized[Number(k)] = levels[k]);
-                return normalized;
-              })(),
+              unlockedLevels: normalizeLevels(data.unlockedLevels ?? prev.unlockedLevels),
               completedLevels: data.completedLevels ?? prev.completedLevels,
               pendingLevels: data.pendingLevels ?? prev.pendingLevels,
               teacherFeedback: {
@@ -1080,6 +1082,11 @@ function AppContent() {
       return;
     }
 
+    // iOS/Safari requirement: Resume AudioContext on user gesture
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(e => console.warn("Failed to resume AudioContext", e));
+    }
+
     // Stop any ongoing speech synthesis
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
@@ -1278,21 +1285,18 @@ function AppContent() {
         isRecordingRef.current = true;
         setState(prev => ({ ...prev, transcript: '', isRecording: true, score: 0 }));
         
-        // Step 2: Start recognition FIRST (Safari likes this)
-        setTimeout(() => {
-          if (!isRecordingRef.current) return; // User cancelled during delay
-          try {
-            recognition.start();
-          } catch (e) {
-            console.warn("Recognition already started or in transition", e);
+        // Step 2: Start recognition with very minimal delay for Safari
+        // Note: Safari is very sensitive to delays after the user click
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn("Direct recognition start failed, trying backup delay", e);
+          setTimeout(() => {
             if (isRecordingRef.current) {
-              startVisualizer();
-              isInitializingRef.current = false;
-              setIsInitializing(false);
-              if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current);
+              try { recognition.start(); } catch (e2) { console.error("Final recognition start failure", e2); }
             }
-          }
-        }, 100);
+          }, 50);
+        }
 
       } catch (err: any) {
         console.error("Mic init error", err);
@@ -1976,29 +1980,34 @@ function AppContent() {
                     <p className="text-sm text-slate-400 uppercase tracking-widest">{selectedStudent.topic}</p>
                     
                     {/* Real-time Progress Bar on Selection Screen */}
-                    <div className="mt-4 space-y-1">
-                      <div className="flex justify-between items-end">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adventure XP</span>
-                        <span className="text-xs font-black text-blue-400">{mockProgress[selectedStudent.id].adventure}</span>
+                    {selectedStudent && mockProgress[selectedStudent.id] && (
+                      <div className="mt-4 space-y-1">
+                        <div className="flex justify-between items-end">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adventure XP</span>
+                          <span className="text-xs font-black text-blue-400">{mockProgress[selectedStudent.id].adventure}</span>
+                        </div>
+                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                          <motion.div 
+                            className="h-full bg-gradient-to-r from-blue-600 to-purple-500"
+                            initial={{ width: 0 }}
+                            animate={{ width: mockProgress[selectedStudent.id].adventure }}
+                            transition={{ type: "spring", stiffness: 50 }}
+                          />
+                        </div>
+                        <div className="text-[9px] text-slate-600 flex flex-col items-center justify-center gap-1 pt-1">
+                          <div className="flex items-center gap-1">
+                            <motion.div
+                              animate={{ opacity: [1, 0.5, 1] }}
+                              transition={{ repeat: Infinity, duration: 2 }}
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-blue-500" />
+                            </motion.div>
+                            Cloud Sync Active (ID: {selectedStudent.id})
+                          </div>
+                          {!recognition && <p className="text-red-500 font-bold">⚠️ Recording not supported on this browser</p>}
+                        </div>
                       </div>
-                      <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
-                        <motion.div 
-                          className="h-full bg-gradient-to-r from-blue-600 to-purple-500"
-                          initial={{ width: 0 }}
-                          animate={{ width: mockProgress[selectedStudent.id].adventure }}
-                          transition={{ type: "spring", stiffness: 50 }}
-                        />
-                      </div>
-                    <div className="text-[9px] text-slate-600 flex items-center justify-center gap-1 pt-1">
-                      <motion.div
-                        animate={{ opacity: [1, 0.5, 1] }}
-                        transition={{ repeat: Infinity, duration: 2 }}
-                      >
-                        <Sparkles className="w-2.5 h-2.5 text-blue-500" />
-                      </motion.div>
-                      Real-time Cloud Sync Active
-                    </div>
-                    </div>
+                    )}
                   </div>
                   <div className="flex gap-2 w-full">
                     <button 
@@ -2016,7 +2025,7 @@ function AppContent() {
                               adventure: `${Math.floor(data.adventureProgress || 0)}%`,
                               drink: `${Math.floor(data.drinkProgress || 0)}%`,
                               unlockedParts: Math.max(4, data.unlockedParts || 1),
-                              unlockedLevels: data.unlockedLevels || { 0: 1, 1: 1, 2: 1, 3: 1 },
+                              unlockedLevels: normalizeLevels(data.unlockedLevels),
                               completedLevels: data.completedLevels || [],
                               pendingLevels: data.pendingLevels || []
                             };
@@ -2196,25 +2205,27 @@ function AppContent() {
         <div className="min-h-screen p-4 md:p-8 flex flex-col">
         {/* Header */}
         <header className="flex items-center justify-between mb-12">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setState(prev => ({ ...prev, view: 'selection', student: null }))}
-              className="relative group"
-            >
-              <img 
-                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}&backgroundColor=b6e3f4`} 
-                alt="Avatar"
-                className="w-16 h-16 rounded-full bg-white/10 border-2 border-blue-500/50 group-hover:scale-110 transition-transform"
-              />
-              <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border-2 border-slate-950">
-                <RotateCcw className="w-3 h-3 text-white" />
+          {state.student && (
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setState(prev => ({ ...prev, view: 'selection', student: null }))}
+                className="relative group"
+              >
+                <img 
+                  src={`https://api.dicebear.com/7.x/bottts/svg?seed=${state.student.id}&backgroundColor=b6e3f4`} 
+                  alt="Avatar"
+                  className="w-16 h-16 rounded-full bg-white/10 border-2 border-blue-500/50 group-hover:scale-110 transition-transform"
+                />
+                <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border-2 border-slate-950">
+                  <RotateCcw className="w-3 h-3 text-white" />
+                </div>
+              </button>
+              <div>
+                <h2 className="font-bungee text-2xl text-blue-400 leading-none">{state.student.title}</h2>
+                <p className="text-xs text-slate-400 uppercase tracking-widest mt-2">Hero Mission: {state.student.topic}</p>
               </div>
-            </button>
-            <div>
-              <h2 className="font-bungee text-2xl text-blue-400 leading-none">{state.student.title}</h2>
-              <p className="text-xs text-slate-400 uppercase tracking-widest mt-2">Hero Mission: {state.student.topic}</p>
             </div>
-          </div>
+          )}
 
           <div className="flex items-center gap-4">
             {/* Progress */}
@@ -3164,7 +3175,12 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
     
     const unsubscribe = onSnapshot(progressRef, (snapshot) => {
       if (snapshot.exists()) {
-        setEditData(snapshot.data());
+        const data = snapshot.data();
+        setEditData({
+          ...data,
+          unlockedParts: Math.max(4, data.unlockedParts || 1),
+          unlockedLevels: normalizeLevels(data.unlockedLevels)
+        });
       } else {
         setEditData({
           adventureProgress: 0,
