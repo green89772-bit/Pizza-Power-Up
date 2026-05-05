@@ -145,10 +145,10 @@ class ErrorBoundary extends Component<EBProps, EBState> {
   }
 }
 
-type Level = 1 | 2 | 3 | 4;
+type Level = 1 | 2 | 3 | 4 | 5;
 
 interface GameState {
-  view: 'selection' | 'game' | 'teacher' | 'task' | 'map' | 'admin';
+  view: 'selection' | 'game' | 'teacher' | 'task' | 'map' | 'admin' | 'ai_battle';
   student: StudentScript | null;
   level: Level;
   currentPart: number;
@@ -159,6 +159,7 @@ interface GameState {
   frequencyData: number[];
   adventureProgress: number;
   drinkProgress: number;
+  masteryProgress: number;
   unlockedParts: number;
   unlockedLevels: Record<number, number>; // partIndex -> maxLevelUnlocked (1-4)
   completedLevels: string[]; // "partIndex-level"
@@ -210,6 +211,7 @@ function AppContent() {
       frequencyData: Array(8).fill(0),
       adventureProgress: 0,
       drinkProgress: 0,
+      masteryProgress: 0,
       unlockedParts: 4,
       unlockedLevels: { 0: 1, 1: 1, 2: 1, 3: 1 },
       completedLevels: [],
@@ -234,6 +236,7 @@ function AppContent() {
         updates[doc.id] = {
           adventure: `${Math.floor(data.adventureProgress || 0)}%`,
           drink: `${Math.floor(data.drinkProgress || 0)}%`,
+          mastery: `${Math.floor(data.masteryProgress || 0)}%`,
           unlockedParts: Math.max(4, data.unlockedParts || 1),
           unlockedLevels: normalizeLevels(data.unlockedLevels),
           completedLevels: data.completedLevels || [],
@@ -278,6 +281,7 @@ function AppContent() {
               ...prev,
               adventureProgress: data.adventureProgress ?? prev.adventureProgress,
               drinkProgress: data.drinkProgress ?? prev.drinkProgress,
+              masteryProgress: data.masteryProgress ?? prev.masteryProgress,
               unlockedParts: Math.max(4, data.unlockedParts ?? prev.unlockedParts),
               unlockedLevels: normalizeLevels(data.unlockedLevels ?? prev.unlockedLevels),
               completedLevels: data.completedLevels ?? prev.completedLevels,
@@ -309,6 +313,7 @@ function AppContent() {
       studentId,
       adventureProgress: state.adventureProgress,
       drinkProgress: state.drinkProgress,
+      masteryProgress: state.masteryProgress,
       unlockedParts: state.unlockedParts,
       unlockedLevels: state.unlockedLevels,
       completedLevels: state.completedLevels,
@@ -327,6 +332,7 @@ function AppContent() {
   }, [
     state.adventureProgress, 
     state.drinkProgress, 
+    state.masteryProgress,
     state.unlockedParts, 
     state.unlockedLevels, 
     state.completedLevels, 
@@ -339,6 +345,13 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  
+  // AI Master Battle states
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiBattleFeedback, setAiBattleFeedback] = useState("");
+  const [isLoadingAIQuestion, setIsLoadingAIQuestion] = useState(false);
+  const [aiBattleScore, setAiBattleScore] = useState(0);
+  const [lastBattleTranscript, setLastBattleTranscript] = useState("");
 
   const handleAdminLogin = () => {
     const pass = prompt("Please enter Teacher Password:");
@@ -1071,8 +1084,11 @@ function AppContent() {
   };
 
   const calculateAdventureProgress = (completedLevels: string[]) => {
-    // 4 parts * 3 levels (1-3) = 12 tasks total for Adventure
-    const adventureTasks = completedLevels.filter(cl => !cl.endsWith('-4')).length;
+    // 4 parts * 3 levels (1-1, 1-2, 1-3, etc) = 12 tasks total for Adventure
+    const adventureTasks = completedLevels.filter(cl => {
+      const lv = parseInt(cl.split('-')[1]);
+      return lv >= 1 && lv <= 3;
+    }).length;
     return (Math.min(adventureTasks, 12) / 12) * 100;
   };
 
@@ -1080,6 +1096,112 @@ function AppContent() {
     // 4 parts * 1 level (4) = 4 tasks total for Drink
     const drinkTasks = completedLevels.filter(cl => cl.endsWith('-4')).length;
     return (Math.min(drinkTasks, 4) / 4) * 100;
+  };
+
+  const calculateMasteryProgress = (completedLevels: string[]) => {
+    // 4 parts * 1 level (5) = 4 tasks total for Mastery
+    const masteryTasks = completedLevels.filter(cl => cl.endsWith('-5')).length;
+    return (Math.min(masteryTasks, 4) / 4) * 100;
+  };
+
+  const startAIBattle = async () => {
+    if (!state.student) return;
+    setIsLoadingAIQuestion(true);
+    setAiBattleFeedback("");
+    setAiBattleScore(0);
+    setLastBattleTranscript("");
+    setState(prev => ({ ...prev, view: 'ai_battle', transcript: '', score: 0 }));
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const prompt = `I am ${state.student.name}. My adventure topic is "${state.student.topic}". 
+      I just finished practicing my Part ${state.currentPart + 1} speech. 
+      Can you ask me ONE very short, fun, and magical follow-up question in English? 
+      Make it feel like a quest challenge from a hero mentor.
+      Keep it simple for a child (age 8-12). Maximum 15 words.`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite-preview",
+        contents: prompt
+      });
+      
+      setAiQuestion(response.text || "Can you tell me more about your hero mission?");
+    } catch (err) {
+      console.error("AI Question Error", err);
+      setAiQuestion("How will you save the planet today?");
+    } finally {
+      setIsLoadingAIQuestion(false);
+    }
+  };
+
+  const analyzeAIBattleResponse = async (transcript: string) => {
+    if (!transcript) return;
+    setState(prev => ({ ...prev, isAnalyzingAI: true }));
+    setLastBattleTranscript(transcript);
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const prompt = `Student Name: ${state.student?.name}
+      Topic: ${state.student?.topic}
+      Question Asked: "${aiQuestion}"
+      Student Answer: "${transcript}"
+      
+      Rate this answer from 0-100 based on English clarity, relevance to the topic, and hero-like creativity.
+      Also provide a short magical feedback in English (max 2 sentences).
+      Response in JSON format: {"score": number, "feedback": string}`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite-preview",
+        contents: prompt,
+        config: {
+           responseMimeType: "application/json",
+           responseSchema: {
+             type: Type.OBJECT,
+             properties: {
+               score: { type: Type.NUMBER },
+               feedback: { type: Type.STRING }
+             },
+             required: ["score", "feedback"]
+           }
+        }
+      });
+      
+      const result = JSON.parse(response.text);
+      setAiBattleScore(result.score);
+      setAiBattleFeedback(result.feedback);
+      
+      if (result.score >= 70) {
+        const levelKey = `${state.currentPart}-5`;
+        const newCompleted = Array.from(new Set([...state.completedLevels, levelKey]));
+        const newAdventure = calculateAdventureProgress(newCompleted);
+        const newDrink = calculateDrinkProgress(newCompleted);
+        
+        setState(prev => ({ 
+          ...prev, 
+          completedLevels: newCompleted,
+          adventureProgress: newAdventure,
+          drinkProgress: newDrink
+        }));
+        
+        setMockProgress(prev => ({
+          ...prev,
+          [state.student!.id]: {
+            ...prev[state.student!.id],
+            completedLevels: newCompleted,
+            adventure: `${Math.floor(newAdventure)}%`,
+            drink: `${Math.floor(newDrink)}%`
+          }
+        }));
+        
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#f59e0b', '#8b5cf6', '#3b82f6'] });
+      }
+    } catch (err) {
+      console.error("AI Battle Analysis Error", err);
+      setAiBattleFeedback("Your voice is powerful! The connection is fuzzy but you are a true hero! 🌟");
+      setAiBattleScore(85);
+    } finally {
+      setState(prev => ({ ...prev, isAnalyzingAI: false }));
+    }
   };
 
   // --- Actions ---
@@ -1120,6 +1242,13 @@ function AppContent() {
       
       // Use transcriptRef + interim to get the absolute latest text
       const finalTranscript = (transcriptRef.current + ' ' + interimTranscriptRef.current).trim();
+      
+      if (state.view === 'ai_battle') {
+        setState(prev => ({ ...prev, isRecording: false }));
+        analyzeAIBattleResponse(finalTranscript);
+        return;
+      }
+
       const { score: finalScore, missed } = calculateScore(finalTranscript, state.student!.scripts[state.currentPart]);
       
       setLastMissedWords(missed);
@@ -1879,6 +2008,25 @@ function AppContent() {
     );
   }
 
+  if (state.view === 'ai_battle') {
+    return (
+      <AIBattleView 
+        student={state.student!} 
+        question={aiQuestion}
+        feedback={aiBattleFeedback}
+        score={aiBattleScore}
+        isLoading={isLoadingAIQuestion}
+        isAnalyzing={state.isAnalyzingAI}
+        transcript={state.transcript}
+        lastTranscript={lastBattleTranscript}
+        isRecording={state.isRecording}
+        onToggleRecording={toggleRecording}
+        onBack={() => setState(prev => ({ ...prev, view: 'map' }))}
+        onRetry={startAIBattle}
+      />
+    );
+  }
+
   if (state.view === 'selection' || !state.student) {
     const selectedStudent = STUDENTS.find(s => s.id === selectedId);
 
@@ -1988,18 +2136,52 @@ function AppContent() {
                     
                     {/* Real-time Progress Bar on Selection Screen */}
                     {selectedStudent && mockProgress[selectedStudent.id] && (
-                      <div className="mt-4 space-y-1">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adventure XP</span>
-                          <span className="text-xs font-black text-blue-400">{mockProgress[selectedStudent.id].adventure}</span>
+                      <div className="mt-4 space-y-3">
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Adventure XP</span>
+                            <span className="text-xs font-black text-blue-400">{mockProgress[selectedStudent.id].adventure}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                            <motion.div 
+                              className="h-full bg-gradient-to-r from-blue-600 to-blue-400"
+                              initial={{ width: 0 }}
+                              animate={{ width: mockProgress[selectedStudent.id].adventure }}
+                              transition={{ type: "spring", stiffness: 50 }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
-                          <motion.div 
-                            className="h-full bg-gradient-to-r from-blue-600 to-purple-500"
-                            initial={{ width: 0 }}
-                            animate={{ width: mockProgress[selectedStudent.id].adventure }}
-                            transition={{ type: "spring", stiffness: 50 }}
-                          />
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Energy Drink</span>
+                            <span className="text-xs font-black text-purple-400">{mockProgress[selectedStudent.id].drink}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                            <motion.div 
+                              className="h-full bg-gradient-to-r from-purple-600 to-purple-400"
+                              initial={{ width: 0 }}
+                              animate={{ width: mockProgress[selectedStudent.id].drink }}
+                              transition={{ type: "spring", stiffness: 50 }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1">
+                              <Trophy className="w-2.5 h-2.5" /> AI Mastery
+                            </span>
+                            <span className="text-xs font-black text-amber-400">{(mockProgress[selectedStudent.id] as any).mastery || "0%"}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/10 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
+                            <motion.div 
+                              className="h-full bg-gradient-to-r from-amber-500 to-amber-300"
+                              initial={{ width: 0 }}
+                              animate={{ width: (mockProgress[selectedStudent.id] as any).mastery || "0%" }}
+                              transition={{ type: "spring", stiffness: 50 }}
+                            />
+                          </div>
                         </div>
                         <div className="text-[9px] text-slate-600 flex flex-col items-center justify-center gap-1 pt-1">
                           <div className="flex items-center gap-1">
@@ -2297,7 +2479,11 @@ function AppContent() {
             // Respect database state for unlocking
             const isUnlocked = partIdx + 1 <= state.unlockedParts;
             const rawUnlockedLevel = state.unlockedLevels[partIdx] || (state.unlockedLevels as any)[String(partIdx)] || 1;
-            const maxLevel = partIdx === 0 ? 4 : Math.max(1, rawUnlockedLevel);
+            // Level 4 is Teacher Review, Level 5 is AI Master Battle
+            let maxLevel = partIdx === 0 ? 4 : Math.max(1, rawUnlockedLevel);
+            if (state.completedLevels.includes(`${partIdx}-4`)) {
+              maxLevel = 5;
+            }
             
             return (
               <motion.div 
@@ -2324,6 +2510,7 @@ function AppContent() {
                 </div>
 
                 <div className="flex-1 flex flex-col gap-3">
+                  {/* Level 1-3 */}
                   {[1, 2, 3].map((lv) => {
                     const isLvUnlocked = lv <= maxLevel;
                     const isCompleted = state.completedLevels.includes(`${partIdx}-${lv}`);
@@ -2387,6 +2574,37 @@ function AppContent() {
                         </div>
                         {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : isPending ? <AlertCircle className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
                       </button>
+                    );
+                  })()}
+
+                  {/* Level 5: Legendary AI Master Battle */}
+                  {maxLevel >= 5 && (() => {
+                    const levelKey = `${partIdx}-5`;
+                    const isCompleted = state.completedLevels.includes(levelKey);
+                    
+                    return (
+                      <motion.button
+                        initial={{ scale: 0.95 }}
+                        animate={{ scale: [0.95, 1, 0.95] }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        onClick={startAIBattle}
+                        className={`w-full p-4 mt-4 rounded-2xl flex items-center justify-between transition-all border-2 border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] ${
+                          isCompleted
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-amber-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-amber-500 shadow-lg shadow-amber-500/50`}>
+                            <Trophy className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="text-left">
+                            <span className="font-black text-xs block tracking-tighter">AI LEGENDARY</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">MASTER CHALLENGE</span>
+                          </div>
+                        </div>
+                        {isCompleted ? <Sparkles className="w-5 h-5 text-amber-400" /> : <Play className="w-4 h-4 fill-current" />}
+                      </motion.button>
                     );
                   })()}
                 </div>
@@ -2592,6 +2810,17 @@ function AppContent() {
               </svg>
             </div>
             <span className="font-bungee text-sm">{Math.floor(state.drinkProgress)}%</span>
+          </div>
+
+          <div className="glass px-3 py-2 rounded-xl flex items-center gap-2" title="AI Master Battle Progress">
+            <div className="relative w-6 h-6 flex items-center justify-center">
+              <Trophy className={`w-4 h-4 ${state.masteryProgress >= 100 ? 'text-amber-400' : 'text-amber-400/20'}`} />
+              <svg className="absolute inset-0 w-6 h-6 -rotate-90" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-800" />
+                <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="88" strokeDashoffset={88 - (88 * state.masteryProgress) / 100} className="text-amber-400" strokeLinecap="round" />
+              </svg>
+            </div>
+            <span className="font-bungee text-sm">{Math.floor(state.masteryProgress)}%</span>
           </div>
 
           <button 
@@ -3456,5 +3685,216 @@ function AdminPanel({ onBack, onUpdate }: AdminPanelProps) {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function AIBattleView({ 
+  student, 
+  question, 
+  feedback, 
+  score, 
+  isLoading, 
+  isAnalyzing, 
+  transcript,
+  lastTranscript,
+  isRecording, 
+  onToggleRecording, 
+  onBack,
+  onRetry
+}: { 
+  student: any, 
+  question: string, 
+  feedback: string, 
+  score: number, 
+  isLoading: boolean, 
+  isAnalyzing: boolean,
+  transcript: string,
+  lastTranscript: string,
+  isRecording: boolean, 
+  onToggleRecording: () => void, 
+  onBack: () => void,
+  onRetry: () => void
+}) {
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 overflow-hidden relative">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 blur-[120px] rounded-full animate-pulse-slow" />
+      </div>
+
+      <header className="flex items-center justify-between mb-8 relative z-10">
+        <button 
+          onClick={onBack}
+          className="p-3 glass rounded-2xl hover:bg-white/10 transition-colors flex items-center gap-2 group"
+        >
+          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          <span className="font-bold uppercase tracking-widest text-xs">Retreat to Map</span>
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-2 bg-amber-500/20 rounded-full border border-amber-500/50 flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <span className="font-bungee text-xs text-amber-500 tracking-wider">AI MASTER CHALLENGE</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex-1 max-w-4xl mx-auto w-full flex flex-col gap-8 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-1">
+          <motion.div 
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex flex-col items-center justify-center gap-6"
+          >
+            <div className="relative">
+              <motion.div 
+                animate={{ 
+                  scale: [1, 1.05, 1],
+                  rotate: [0, 2, -2, 0]
+                }}
+                transition={{ repeat: Infinity, duration: 4 }}
+                className="w-48 h-48 rounded-[3rem] bg-gradient-to-br from-amber-400 to-amber-700 p-1 shadow-[0_0_50px_rgba(245,158,11,0.3)]"
+              >
+                <div className="w-full h-full rounded-[2.8rem] bg-slate-900 flex items-center justify-center overflow-hidden border-4 border-slate-950">
+                  <img 
+                    src="https://api.dicebear.com/7.x/bottts/svg?seed=AIMaster&backgroundColor=ffd700" 
+                    alt="AI Master"
+                    className="w-32 h-32"
+                  />
+                </div>
+              </motion.div>
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 px-4 py-1 rounded-full font-black text-[10px] tracking-widest uppercase border-4 border-slate-950">
+                AI SENSEI
+              </div>
+            </div>
+
+            <div className="w-full glass p-6 rounded-[2.5rem] relative">
+              <div className="absolute -top-3 left-10 w-6 h-6 bg-slate-800 rotate-45 border-l border-t border-white/10" />
+              {isLoading ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                  <p className="text-amber-500 font-bold uppercase tracking-widest text-[10px] animate-pulse">Summoning Challenge...</p>
+                </div>
+              ) : (
+                <motion.p 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-lg md:text-xl font-medium text-amber-100 leading-relaxed italic text-center"
+                >
+                  "{question}"
+                </motion.p>
+              )}
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex flex-col items-center justify-center gap-6"
+          >
+            <div className="relative">
+              <div className="w-48 h-48 rounded-[3rem] bg-gradient-to-br from-blue-400 to-blue-700 p-1 shadow-[0_0_50px_rgba(59,130,246,0.3)]">
+                <div className="w-full h-full rounded-[2.8rem] bg-slate-900 flex items-center justify-center overflow-hidden border-4 border-slate-950">
+                  <img 
+                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${student.id}&backgroundColor=b6e3f4`} 
+                    alt={student.name}
+                    className="w-32 h-32"
+                  />
+                </div>
+              </div>
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-4 py-1 rounded-full font-black text-[10px] tracking-widest uppercase border-4 border-slate-950">
+                {student.name}
+              </div>
+            </div>
+
+            <div className="w-full glass-dark p-6 rounded-[2.5rem] min-h-[120px] flex flex-col justify-center border-dashed border-2 border-blue-500/30">
+              <p className="text-blue-400 font-bold uppercase tracking-widest text-[10px] mb-2">My Answer</p>
+              {transcript ? (
+                <p className="text-lg text-white font-medium italic">"{transcript}{isRecording ? '...' : ''}"</p>
+              ) : feedback ? (
+                <p className="text-lg text-white font-medium italic">"{lastTranscript}"</p>
+              ) : (
+                <p className="text-slate-500 italic text-sm">Waiting for hero's voice...</p>
+              )}
+            </div>
+          </motion.div>
+        </div>
+
+        <div className="flex flex-col items-center gap-6 pb-8">
+          <AnimatePresence mode="wait">
+            {!feedback ? (
+              <motion.button
+                key="mic"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onToggleRecording}
+                disabled={isLoading || isAnalyzing}
+                className={`w-24 h-24 rounded-full flex items-center justify-center relative ${
+                  isRecording 
+                    ? 'bg-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)]' 
+                    : 'bg-blue-600 shadow-[0_0_30px_rgba(59,130,246,0.5)]'
+                }`}
+              >
+                {isRecording ? (
+                  <MicOff className="w-10 h-10 text-white" />
+                ) : (
+                  <Mic className="w-10 h-10 text-white" />
+                )}
+                {isRecording && (
+                  <motion.div 
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1.5, opacity: [0, 0.5, 0] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute inset-0 rounded-full border-4 border-red-400"
+                  />
+                )}
+              </motion.button>
+            ) : (
+              <motion.div 
+                key="result"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center gap-6"
+              >
+                <div className="flex items-center gap-8">
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">SCORE</p>
+                    <div className="text-5xl font-bungee text-amber-500">{score}</div>
+                  </div>
+                  <div className="w-1 h-12 bg-white/10 rounded-full" />
+                  <div className="max-w-xs text-center md:text-left">
+                     <p className="text-[10px] text-amber-500 uppercase font-black tracking-widest mb-1">AI FEEDBACK</p>
+                     <p className="text-sm text-slate-300 italic">"{feedback}"</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button 
+                    onClick={onRetry}
+                    className="px-8 py-4 glass rounded-2xl font-bold hover:bg-white/10 transition-all flex items-center gap-2"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                    RETRY CHALLENGE
+                  </button>
+                  <button 
+                    onClick={onBack}
+                    className="px-8 py-4 bg-gradient-to-r from-amber-500 to-amber-700 text-slate-950 rounded-2xl font-black transition-all flex items-center gap-2"
+                  >
+                    RETURN TO MAP
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {isAnalyzing && (
+            <div className="flex items-center gap-3 text-amber-500">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="font-black text-xs uppercase tracking-widest">AI Master is analyzing your spirit...</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
